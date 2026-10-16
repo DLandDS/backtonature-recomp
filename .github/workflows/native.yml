@@ -1,0 +1,35 @@
+name: Native runtime
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Linux desktop headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
+      - name: Configure
+        run: cmake -S . -B build/native -DBTN_BUILD_NATIVE=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/native --config Debug --parallel 4
+      - name: Test synthetic runtime
+        run: ctest --test-dir build/native -C Debug --output-on-failure
+      - name: Configure Linux sanitizers
+        if: runner.os == 'Linux'
+        run: cmake -S . -B build/native-sanitized -DBTN_BUILD_NATIVE=ON -DBTN_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug -DFETCHCONTENT_SOURCE_DIR_SDL3=${{ github.workspace }}/build/native/_deps/sdl3-src
+      - name: Build and test Linux sanitizers
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build/native-sanitized --parallel 4
+          ctest --test-dir build/native-sanitized --output-on-failure

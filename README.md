@@ -82,6 +82,9 @@ their offset names; an unknown meaning is not guessed.
 
 ## Building
 
+For the separate synthetic SDL3 runtime (no game data or PSY-Q required), see
+[Native SDL3 runtime](docs/native-runtime.md). It is not a playable game port.
+
 ### 1. Build the toolchain image
 
 ```sh

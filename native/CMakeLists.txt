@@ -1,0 +1,56 @@
+include(FetchContent)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
+# Hash the release archive, not a moving branch. An offline checkout can use
+# -DFETCHCONTENT_SOURCE_DIR_SDL3=/path/to/SDL-release-3.2.10.
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(SDL3
+    URL https://codeload.github.com/libsdl-org/SDL/tar.gz/refs/tags/release-3.2.10
+    URL_HASH SHA256=8a6ddc3e70de897f7921da275ac71e375de89dad802aa2932649d1fea9068478)
+FetchContent_MakeAvailable(SDL3)
+
+option(BTN_SANITIZERS "Enable ASan and UBSan for native project code" OFF)
+add_library(btn_runtime STATIC runtime.c)
+target_include_directories(btn_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_executable(btn-native main.c)
+target_link_libraries(btn-native PRIVATE btn_runtime SDL3::SDL3-static)
+
+set(BTN_TARGETS btn_runtime btn-native)
+if(BUILD_TESTING)
+    add_executable(btn-runtime-test ../tests/test_native_runtime.c)
+    target_link_libraries(btn-runtime-test PRIVATE btn_runtime)
+    list(APPEND BTN_TARGETS btn-runtime-test)
+    add_test(NAME native-core COMMAND btn-runtime-test)
+    add_executable(btn-input-test ../tests/test_native_input.c)
+    target_link_libraries(btn-input-test PRIVATE btn_runtime SDL3::SDL3-static)
+    list(APPEND BTN_TARGETS btn-input-test)
+    add_test(NAME native-input COMMAND btn-input-test "${CMAKE_CURRENT_BINARY_DIR}/test-saves")
+    set_tests_properties(native-input PROPERTIES
+        ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME native-sdl COMMAND "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/check_native_cli.py" "$<TARGET_FILE:btn-native>")
+endif()
+
+foreach(target IN LISTS BTN_TARGETS)
+    set_target_properties(${target} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    endif()
+    if(BTN_SANITIZERS)
+        if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT WIN32)
+            target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+            target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+        else()
+            message(FATAL_ERROR "BTN_SANITIZERS currently requires GCC/Clang on Linux")
+        endif()
+    endif()
+endforeach()
