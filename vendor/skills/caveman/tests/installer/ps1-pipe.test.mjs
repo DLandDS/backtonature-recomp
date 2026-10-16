@@ -1,0 +1,80 @@
+// Regression for #565: `irm .../install.ps1 | iex` crashed with
+// "Cannot bind argument to parameter 'Path' because it is null."
+//
+// Two pipe-execution rules for install.ps1 (static checks — CI has no pwsh):
+//   1. No top-level param() block. iex executes the file as a string, so a
+//      top-level param can never receive arguments and (depending on host)
+//      trips parsing. All logic lives in a function invoked at the bottom.
+//   2. Script-path variables ($PSCommandPath / $MyInvocation.MyCommand.Path)
+//      are $null under iex — any use must be guarded, never passed straight
+//      into Split-Path (that was the #565 crash).
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, '..', '..');
+const PS1 = fs.readFileSync(path.join(REPO_ROOT, 'install.ps1'), 'utf8');
+
+// Strip comment lines so doc mentions of param()/path vars don't false-positive.
+const code = PS1.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
+
+test('#565 install.ps1 has no top-level param block (everything inside a function)', () => {
+  const beforeFunction = code.slice(0, code.indexOf('function '));
+  assert.ok(code.includes('function '), 'install.ps1 must wrap its logic in a function for iex piping');
+  assert.ok(
+    !/param\s*\(/i.test(beforeFunction),
+    'install.ps1 must not declare a top-level param() — it cannot receive args under `irm | iex` (issue #565)',
+  );
+});
+
+test('#565 install.ps1 never uses $MyInvocation.MyCommand.Path (null under iex)', () => {
+  assert.ok(
+    !/\$MyInvocation\.MyCommand\.Path/i.test(code),
+    'install.ps1 must not rely on $MyInvocation.MyCommand.Path — it is $null when piped to iex (issue #565)',
+  );
+});
+
+test('#565 install.ps1 guards $PSCommandPath before Split-Path', () => {
+  if (/\$PSCommandPath/i.test(code)) {
+    assert.match(
+      code,
+      /if\s*\(\s*\$PSCommandPath\s*\)/i,
+      '$PSCommandPath is $null under `irm | iex` — it must be truthiness-guarded before use (issue #565)',
+    );
+  }
+});
+
+test('#565 install.ps1 invokes its function at the bottom (script still does something)', () => {
+  const lastLines = code.trim().split('\n').slice(-3).join('\n');
+  assert.match(
+    lastLines,
+    /Install-Caveman/,
+    'install.ps1 must actually invoke Install-Caveman after defining it',
+  );
+});
+
+test('npm 12+ opts the root package into git fetching', () => {
+  // stderr is discarded on both shims, so an npm notice cannot floor the major to 0.
+  assert.match(code, /\$npxVersion\s*=\s*\[string\]\(& npx --version 2>\$null\)/i);
+  assert.match(
+    code,
+    /if\s*\(\s*\$npxMajor\s+-ge\s+12\s*\)\s*\{[\s\S]*?& npx --allow-git=root -y/i,
+    'npm 12+ must pass --allow-git=root before the GitHub package spec',
+  );
+  assert.match(
+    code,
+    /else\s*\{\s*& npx -y/i,
+    'older npm versions must keep the legacy npx invocation',
+  );
+  // The .sh twin is covered in shim-npm-version.test.mjs: both shims must keep
+  // the immutable release pin on BOTH npm branches.
+  assert.equal(
+    (code.match(/"github:\$Repo#\$PinnedRef"/g) || []).length,
+    2,
+    'both the npm 12+ and legacy branches must pin the ref',
+  );
+});
