@@ -1,0 +1,49 @@
+{
+  "caveman": {
+    "repository": "https://github.com/juliusbrussee/caveman",
+    "commit": "99aafe151a1be72be783e662858e8a0955add59f",
+    "skills": [
+      "cavecrew",
+      "caveman",
+      "caveman-commit",
+      "caveman-compress",
+      "caveman-discover",
+      "caveman-evidence-review",
+      "caveman-explore",
+      "caveman-help",
+      "caveman-learn",
+      "caveman-manage",
+      "caveman-optimize",
+      "caveman-review",
+      "caveman-setup",
+      "caveman-stats",
+      "investigate-first",
+      "lean-build",
+      "megacave",
+      "migration",
+      "safe-refactor",
+      "surgical-patch",
+      "ultracave",
+      "verify-and-stop"
+    ]
+  },
+  "ponytail": {
+    "repository": "https://github.com/dietrichgebert/ponytail",
+    "commit": "552acd5efd0aeae2583a12efe39373d2f076f25e",
+    "skills": [
+      "ponytail",
+      "ponytail-audit",
+      "ponytail-debt",
+      "ponytail-gain",
+      "ponytail-help",
+      "ponytail-review"
+    ]
+  },
+  "i-have-adhd": {
+    "repository": "https://github.com/ayghri/i-have-adhd",
+    "commit": "723af7d9afaf43eb871dbcce6129e2bf80de90d5",
+    "skills": [
+      "i-have-adhd"
+    ]
+  }
+}
