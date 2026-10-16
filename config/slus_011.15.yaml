@@ -1,0 +1,331 @@
+name: SLUS_011.15
+# Pristine US retail executable, extracted from your own disc by
+# tools/extract_baserom.py. A modified or translated executable will not match.
+sha1: 07fbcffbdd96080d39939e569f84abe76b9d1039
+options:
+  basename: slus_011.15
+  target_path: baserom/SLUS_011.15
+  elf_path: build/slus_011.15.elf
+  base_path: ..
+  platform: psx
+  compiler: PSYQ
+
+  asm_path: asm
+  src_path: src
+  build_path: build
+  create_asm_dependencies: True
+  migrate_rodata_to_functions: True
+
+  ld_script_path: build/slus_011.15.ld
+  ld_dependencies: True
+
+  # By default splat pads each section/segment end to 16. That rounds the .text
+  # end (0x80048B14) up to 0x80048B20, shifting every .data address by +12 and
+  # the file length by +16. The real boundaries are already exact, so emit no
+  # end-padding at all.
+  ld_align_section_vram_end: False
+  ld_align_segment_vram_end: False
+
+  find_file_boundaries: False
+  gp_value: 0x8005E274
+  # ld_gp_expression: main_SCOMMON_START + 0x7FF0
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+
+  section_order: [".rodata", ".text", ".data", ".bss"]
+  # auto_link_sections: [".data", ".rodata", ".bss"]
+
+  symbol_addrs_path:
+    - symbols/symbol_addrs.txt
+  reloc_addrs_path:
+    - symbols/reloc_addrs.txt
+
+  # Symbols referenced by code but living outside the image (BSS/RAM above
+  # 0x8005E800) or mid-symbol. Emitted as `name = 0xaddr;`, which is already
+  # valid linker-script syntax, so the Makefile feeds them straight to ld.
+  undefined_funcs_auto_path: undefined_funcs_auto.txt
+  undefined_syms_auto_path: undefined_syms_auto.txt
+
+  extensions_path: tools/splat_ext
+
+  subalign: 2
+
+  string_encoding: ASCII
+  data_string_encoding: ASCII
+  rodata_string_guesser_level: 2
+  data_string_guesser_level: 2
+
+  # Uncomment this line if you need to use the maspsx reorder workaround hack
+  # https://github.com/mkst/maspsx?tab=readme-ov-file#include_asm-reordering-workaround-hack
+  # include_asm_macro_style: maspsx_hack
+segments:
+  - name: header
+    type: header
+    start: 0x0
+
+  - name: main
+    type: code
+    start: 0x800
+    vram: 0x80010000
+    # bss_size: Please fill out this value when you figure out the bss size
+    subsegments:
+      # Boundaries reconciled against Ghidra BTN_RE on 2026-09-01:
+      #   .rodata 0x800..0x1A70   (vram 0x80010000..0x80011270)
+      #     - jumptables + strings; last jumptable entry ends at 0x8001126C
+      #   .text   0x1A70..0x3930C (vram 0x80011270..0x80048B0C)
+      #     - first function __main @ 0x80011270 (jr ra / nop stub)
+      #     - last function PDRESRES_OBJ_1E40 @ 0x80048AE4 ends 0x80048B0C
+      #     - 8 bytes of zero padding 0x80048B0C..0x80048B14
+      #   .data   0x39314..       (vram 0x80048B14)
+      # A jump table must live in the same object file as the code it jumps
+      # into. spimdisasm names jump-table targets `.L<addr>`, and GNU as drops
+      # every `.L` symbol from the object symbol table even when macro.inc's
+      # `jlabel` declares it `.global` -- so a table in a standalone rodata
+      # object cannot reference targets inside a `c` unit's object. While the
+      # game code was one big `asm` segment splat migrated each table into the
+      # same .s file as its function and the question never arose. Now that
+      # every unit is a `c` segment, each unit's tables must be declared as a
+      # `.rodata` subsegment of that unit (leading dot) so they are emitted
+      # into the unit's own object.
+      #
+      # A unit gets exactly one contiguous `.rodata` run: ld places an input
+      # section at its first match only, so two subsegments naming the same
+      # object would leave the second empty and shift everything after it.
+      # Data whose ownership is shared or unknown stays in a plain `rodata`
+      # segment between the owned runs.
+      # D_80010000 has no single owning function, so it cannot migrate into
+      # one. It is an ordinary global though, and only `.L` symbols fail to
+      # resolve across objects, so a plain rodata segment is fine here.
+      - [0x800, rodata, 800]         # D_80010000
+      - [0x808, .rodata, boot]       # jtbl_80010008
+      - [0x85C, .rodata, system]     # jtbl_8001005C
+      - [0x878, rodata, 878]         # D_80010078..D_800100A0: archive + shared
+      # 0x8B4..0x940 are text's two INCLUDE_ASM'd tables; 0x944 is the switch
+      # table func_8001A8D0 emits from real C. One contiguous run either way.
+      - [0x8B4, .rodata, text]       # jtbl_800100B4, jtbl_800100DC, jtbl_80010144
+      - [0xA1C, rodata, A1C]         # D_8001021C: state_core
+      - [0xA24, .rodata, ui]         # jtbl_80010224, D_80010318, D_80010358, jtbl_80010378
+      - [0xBB0, rodata, BB0]         # tables targeting the PSY-Q library region
+      # Provisional semantic units. These cover the game-owned code
+      # contiguously.
+      - [0x1A70, c, crt0]
+      - [0x1B18, asm, stup0]
+      - [0x1B70, c, boot]
+      - [0x31F4, c, display]
+      - [0x3234, c, system]
+      - [0x4FBC, c, archive]
+      - [0x8238, c, text]
+      - [0xB734, c, flags]
+      - [0xB7E0, c, state_core]
+      - [0xC2C4, c, gameplay]
+      - [0x11638, c, ui]
+      - [0x152E4, asm, psyq/adddf3]
+      - [0x15664, asm, gap_15664]
+      - [0x15714, asm, psyq/dbshift]
+      - [0x157D4, asm, psyq/fixdfsi]
+      - [0x158D4, asm, psyq/fltsidf]
+      - [0x159F4, asm, psyq/dbshiftu]
+      - [0x15AB4, asm, psyq/ltdf2]
+      - [0x15B94, asm, gap_15B94]
+      - [0x15C04, asm, psyq/muldf3]
+      - [0x16004, asm, psyq/ferr]
+      - [0x16074, asm, psyq/sin00]
+      - [0x163D4, asm, psyq/divdf3]
+      - [0x16704, asm, psyq/gedf2]
+      - [0x167E4, asm, gap_167E4]
+      - [0x16874, asm, psyq/subdf3]
+      - [0x168F4, asm, psyq/sin01]
+      - [0x16974, asm, psyq/s_gks]
+      - [0x16A04, asm, psyq/spu]
+      - [0x17544, asm, gap_17544]
+      - [0x176D4, asm, psyq/sr_gaks]
+      - [0x17834, asm, psyq/s_sca]
+      - [0x17BB4, asm, psyq/ssclose]
+      - [0x17D84, asm, psyq/ssend]
+      - [0x17E34, asm, gap_17E34]
+      - [0x17F34, asm, psyq/s_crwa]
+      - [0x180D4, asm, psyq/s_m_util]
+      - [0x181E4, asm, psyq/ssopenq]
+      - [0x18474, asm, gap_18474]
+      - [0x184F4, asm, psyq/cc_6]
+      - [0x18874, asm, gap_18874]
+      - [0x18B04, asm, psyq/cc_64]
+      - [0x18BB4, asm, gap_18BB4]
+      - [0x18D44, asm, psyq/cc_99]
+      - [0x18E84, asm, gap_18E84]
+      - [0x190B4, asm, psyq/de_1]
+      - [0x19174, asm, gap_19174]
+      - [0x19934, asm, psyq/de_12]
+      - [0x19A14, asm, gap_19A14]
+      - [0x19CF4, asm, psyq/midicc]
+      - [0x19F24, asm, psyq/midimeta]
+      - [0x1A0F4, asm, psyq/midinote]
+      - [0x1A1D4, asm, gap_1A1D4]
+      - [0x1A2F4, asm, psyq/seqinit]
+      - [0x1A644, asm, gap_1A644]
+      - [0x1A894, asm, psyq/playmode]
+      - [0x1A9B4, asm, gap_1A9B4]
+      - [0x1ABD4, asm, psyq/ssstart]
+      - [0x1AEE4, asm, gap_1AEE4]
+      - [0x1B154, asm, psyq/cres]
+      - [0x1B364, asm, gap_1B364]
+      - [0x1B434, asm, psyq/midiread]
+      - [0x1BB24, asm, gap_1BB24]
+      - [0x1C194, asm, psyq/sstick]
+      - [0x1C2E4, asm, gap_1C2E4]
+      - [0x1C324, asm, psyq/ssvol]
+      - [0x1C4B4, asm, psyq/tempo]
+      - [0x1C6D4, asm, gap_1C6D4]
+      - [0x1C824, asm, psyq/s_sva]
+      - [0x1CE24, asm, psyq/s_n2p]
+      - [0x1D024, asm, psyq/ut_gpa]
+      - [0x1D134, asm, psyq/ut_gva]
+      - [0x1D374, asm, psyq/ut_key]
+      - [0x1D824, asm, psyq/ut_keyv]
+      - [0x1DC04, asm, gap_1DC04]
+      - [0x1DC44, asm, psyq/s_srmp]
+      - [0x1E124, asm, gap_1E124]
+      - [0x1E684, asm, psyq/ut_rev]
+      - [0x1E724, asm, gap_1E724]
+      - [0x1E894, asm, psyq/ut_sva]
+      - [0x1EA64, asm, psyq/ut_vvol4]
+      - [0x1EAF4, asm, psyq/vm_aloc1]
+      - [0x1ED64, asm, psyq/vm_aloc2]
+      - [0x1EF34, asm, gap_1EF34]
+      - [0x1F454, asm, psyq/s_sav]
+      - [0x1F714, asm, gap_1F714]
+      - [0x1F7D4, asm, psyq/s_sk]
+      - [0x1F994, asm, gap_1F994]
+      - [0x1F9B4, asm, psyq/vm_init]
+      - [0x1FD04, asm, psyq/s_m_init]
+      - [0x1FD64, asm, gap_1FD64]
+      - [0x1FDA4, asm, psyq/vm_key]
+      - [0x20544, asm, psyq/vm_n2p]
+      - [0x20724, asm, psyq/vm_no1]
+      - [0x20C94, asm, gap_20C94]
+      - [0x20D24, asm, psyq/vm_nowof]
+      - [0x20DE4, asm, psyq/vm_nowon]
+      - [0x212B4, asm, psyq/vm_pb]
+      - [0x21584, asm, gap_21584]
+      - [0x215F4, asm, psyq/vm_seq]
+      - [0x21C74, asm, gap_21C74]
+      - [0x21D44, asm, psyq/vm_vol]
+      - [0x222E4, asm, psyq/vm_vsu]
+      - [0x223A4, asm, gap_223A4]
+      - [0x223C4, asm, psyq/vs_srv]
+      - [0x223F4, asm, gap_223F4]
+      - [0x224A4, asm, psyq/s_m_f]
+      - [0x22524, asm, psyq/s_m_int]
+      - [0x22824, asm, psyq/vs_vh2]
+      - [0x228C4, asm, psyq/s_m_m]
+      - [0x22B94, asm, psyq/vs_vh]
+      - [0x22FF4, asm, psyq/vs_vtbp]
+      - [0x23184, asm, psyq/s_stsa]
+      - [0x231E4, asm, psyq/s_stm]
+      - [0x23214, asm, gap_23214]
+      - [0x232D4, asm, psyq/s_itc]
+      - [0x23384, asm, psyq/vsync]
+      - [0x23594, asm, psyq/intr]
+      - [0x23C54, asm, psyq/intr_vb]
+      - [0x23D74, asm, psyq/intr_dma]
+      - [0x24014, asm, gap_24014]
+      - [0x24044, asm, psyq/event]
+      - [0x24194, asm, gap_24194]
+      - [0x24214, asm, psyq/iso9660]
+      - [0x24B84, asm, psyq/bios_1]
+      - [0x26104, asm, gap_26104]
+      - [0x26264, asm, psyq/s_016]
+      - [0x26624, asm, psyq/cdr_1]
+      - [0x26FC4, asm, gap_26FC4]
+      - [0x272D4, asm, psyq/geo_00]
+      - [0x273A4, asm, psyq/geo_01]
+      - [0x27444, asm, gap_27444]
+      - [0x274B4, asm, psyq/cor_02]
+      - [0x27584, asm, psyq/cor_01]
+      - [0x276A4, asm, psyq/cor_03]
+      - [0x27884, asm, psyq/cor_05]
+      - [0x27A74, asm, gap_27A74]
+      - [0x27B94, asm, psyq/msc02]
+      - [0x27E44, asm, gap_27E44]
+      - [0x281F4, asm, psyq/fgo_01]
+      - [0x28484, asm, psyq/fgo_04]
+      - [0x28624, asm, psyq/fgo_05]
+      - [0x287C4, asm, psyq/fgo_06]
+      - [0x28964, asm, psyq/fgo_08]
+      - [0x28BF4, asm, psyq/ratan]
+      - [0x28D74, asm, psyq/patchgte]
+      - [0x28E54, asm, gap_28E54]
+      - [0x28EF4, asm, psyq/gs_001]
+      - [0x29444, asm, psyq/gs_0022]
+      - [0x29554, asm, gap_29554]
+      - [0x295D4, asm, psyq/gs_004]
+      - [0x296C4, asm, psyq/gs_103]
+      - [0x29764, asm, gap_29764]
+      - [0x29804, asm, psyq/gs_107]
+      - [0x29D74, asm, gap_29D74]
+      - [0x29DA4, asm, psyq/gs_108]
+      - [0x29E24, asm, gap_29E24]
+      - [0x2A964, asm, psyq/kprintf]
+      - [0x2B864, asm, psyq/sys]
+      - [0x2E764, asm, psyq/e00]
+      - [0x2E854, asm, gap_2E854]
+      - [0x2E8C4, asm, psyq/e03]
+      - [0x2E984, asm, gap_2E984]
+      - [0x2EBD4, asm, psyq/p41]
+      - [0x2EC74, asm, psyq/kt01]
+      - [0x2F1A4, asm, psyq/kt02]
+      - [0x2F2E4, asm, gap_2F2E4]
+      - [0x2F714, asm, psyq/libmcrd]
+      - [0x30FE4, asm, gap_30FE4]
+      - [0x31064, asm, psyq/userfunc]
+      - [0x31174, asm, gap_31174]
+      - [0x31824, asm, psyq/low]
+      - [0x322B4, asm, gap_322B4]
+      - [0x322C4, asm, psyq/unformat]
+      - [0x32374, asm, gap_32374]
+      - [0x32454, asm, psyq/sprintf]
+      - [0x32CE4, asm, gap_32CE4]
+      - [0x32CF4, asm, psyq/memmove]
+      - [0x32D64, asm, gap_32D64]
+      - [0x32F64, asm, psyq/counter]
+      - [0x330D4, asm, psyq/first]
+      - [0x33374, asm, gap_33374]
+      - [0x33384, asm, psyq/pad]
+      - [0x33614, asm, gap_33614]
+      - [0x33774, asm, psyq/mcxcmd1]
+      - [0x338D4, asm, psyq/mcxcmd2]
+      - [0x33A34, asm, gap_33A34]
+      - [0x33A64, asm, psyq/mcxcmd4]
+      - [0x33B94, asm, psyq/mcxcmd5]
+      - [0x33C74, asm, psyq/mcxcmd6]
+      - [0x33E04, asm, psyq/mcxcmd7]
+      - [0x33EE4, asm, psyq/mcxcmd8]
+      - [0x34074, asm, psyq/mcxcmd9]
+      - [0x34124, asm, psyq/mcxcmd10]
+      - [0x34414, asm, psyq/mcxcmd11]
+      - [0x344C4, asm, psyq/mcxcmd12]
+      - [0x347C4, asm, psyq/mcxcmd16]
+      - [0x34854, asm, gap_34854]
+      - [0x348D4, asm, psyq/mcxcmd18]
+      - [0x34954, asm, psyq/mcxcmd19]
+      - [0x34A84, asm, psyq/mcxcmd20]
+      - [0x34B44, asm, psyq/mcxcmd21]
+      - [0x34BD4, asm, psyq/mcxcmd22]
+      - [0x34C84, asm, psyq/mcxcmd23]
+      - [0x34DE4, asm, psyq/mcxcmd24]
+      - [0x34FC4, asm, psyq/mcxcmd25]
+      - [0x35544, asm, psyq/mcxcmd27]
+      - [0x355A4, asm, psyq/mcxresi]
+      - [0x35A54, asm, psyq/mcxinit]
+      - [0x35B64, asm, psyq/mcxmain]
+      - [0x361E4, asm, psyq/mcxdsr]
+      - [0x36514, asm, gap_36514]
+      - [0x36564, asm, psyq/pdcmd2]
+      - [0x366D4, asm, psyq/pdent2]
+      - [0x367A4, asm, psyq/pdent3]
+      - [0x368A4, asm, gap_368A4]
+      - [0x36A64, asm, psyq/pddirres]
+      - [0x374A4, asm, gap_374A4]
+      - [0x39314, data, 39314]
+  - [0x4F000]

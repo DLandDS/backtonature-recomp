@@ -1,0 +1,67 @@
+Teach maspsx that a sized .extern can be small data.
+
+cc1 states the size of an extern whose type it knows: `.extern D_8005E44C, 2`.
+GNU as places such a symbol in small data when the size is within -G, which
+makes it gp-relative -- a single instruction, leaving the load delay exposed.
+maspsx skipped .extern lines entirely, so _uses_gp could not see this and
+assumed the following instruction would need an $at expansion to reach its
+symbol. That expansion separates the load from its use, so maspsx dropped the
+`#nop` cc1 had placed in the delay slot, and the function came out one
+instruction shorter than retail.
+
+The externs are kept in their own dict rather than added to sbss_entries,
+because sbss_entries is also used to emit `.section .sbss` and allocate
+storage, and to rewrite stores into explicit %gp_rel. An extern must do
+neither: this unit does not define the symbol. The new dict is read only by
+_uses_gp, so this changes exactly one decision -- whether a load-delay nop is
+required -- and can emit nothing.
+
+Applied with `git apply --recount`, so the hunk line counts below are not
+authoritative; the context lines are.
+
+--- a/maspsx/__init__.py
++++ b/maspsx/__init__.py
+@@ -473,6 +473,9 @@
+         self.bss_entries: dict[str, int] = {}
+         self.sbss_entries: dict[str, int] = {}
+         self.sdata_entries: dict[str, int] = {}
++        # Externs whose stated size is within the sdata limit. Read only by
++        # _uses_gp; never emitted, because this unit does not define them.
++        self.sextern_entries: dict[str, int] = {}
+
+         self.comm_symbols: set[str] = set()
+
+@@ -519,6 +522,17 @@
+             if line.startswith(".extern"):
+                 in_sdata = False
++                # e.g. `.extern D_8005E44C, 2`. cc1 states the size when it
++                # knows the type; GNU as then makes the symbol small data if
++                # the size is within -G, and reaches it through $gp in a
++                # single instruction, leaving the load delay exposed.
++                rest = line[len(".extern"):].strip()
++                if "," in rest:
++                    symbol, _, size_str = rest.partition(",")
++                    symbol = symbol.strip()
++                    size_str = size_str.strip()
++                    if symbol and size_str.isdigit():
++                        if 0 < int(size_str) <= self.sdata_limit:
++                            self.sextern_entries[symbol] = int(size_str)
+                 continue
+
+             if line.startswith(".comm") or line.startswith(".lcomm"):
+@@ -580,6 +594,7 @@
+         self.bss_entries = {}
+         self.sbss_entries = {}
+         self.sdata_entries = {}
++        self.sextern_entries = {}
+
+         self.preprocess_lines()
+
+@@ -687,7 +702,9 @@
+                 if gp_allowed and (
+-                    symbol in self.sbss_entries or symbol in self.sdata_entries
++                    symbol in self.sbss_entries
++                    or symbol in self.sdata_entries
++                    or symbol in self.sextern_entries
+                 ):
+                     return True

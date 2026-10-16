@@ -1,0 +1,64 @@
+#ifndef BTNX_TEXT_TEXT_TYPES_H
+#define BTNX_TEXT_TEXT_TYPES_H
+#include "common.h"
+#include "psyq_gte.h"
+#include "psyq_libgpu.h"
+
+typedef struct MessagePair {
+    s16 a;
+    s16 b;
+} MessagePair;
+
+enum TextWindowStatus {
+    TEXT_WINDOW_PRINTING = 0,
+    TEXT_WINDOW_SCROLL_WAIT = 1,
+    TEXT_WINDOW_CLOSED = 2,
+    TEXT_WINDOW_PAGE_WAIT = 3,
+    TEXT_WINDOW_RESERVED_4 = 4,
+    TEXT_WINDOW_END_WAIT = 5,
+    TEXT_WINDOW_SCROLLING = 6,
+    TEXT_WINDOW_CHOICE_LIST_2 = 7,
+    TEXT_WINDOW_CHOICE_LIST_3 = 8,
+    TEXT_WINDOW_CHOICE_LIST_4 = 9,
+    TEXT_WINDOW_CHOICE_0 = 10,
+    TEXT_WINDOW_CHOICE_1 = 11,
+    TEXT_WINDOW_CHOICE_2 = 12,
+    TEXT_WINDOW_CHOICE_3 = 13,
+    TEXT_WINDOW_DONE = 15,
+};
+
+enum TextWindowState {
+    TEXT_STATE_PRINTING = 0,
+    TEXT_STATE_SCROLLING = 1,
+    TEXT_STATE_END = 2,
+    TEXT_STATE_PAGE_BREAK = 3,
+    TEXT_STATE_CHOICE_2 = 7,
+    TEXT_STATE_CHOICE_3 = 8,
+    TEXT_STATE_CHOICE_4 = 9,
+};
+
+typedef u16 TextWindowResult;
+
+enum TextControlCode {
+    TEXT_CODE_PAGE_END = 0xFFB,
+    TEXT_CODE_PAGE_MARK = 0xFFC,
+    TEXT_CODE_CHOICE_4 = 0xFF8,
+    TEXT_CODE_CHOICE_3 = 0xFF9,
+    TEXT_CODE_CHOICE_2 = 0xFFA,
+    TEXT_CODE_FACE_BANK = 0xFF7,
+    TEXT_CODE_FACE_HIDE = 0xFF6,
+    TEXT_CODE_FACE_RELOAD = 0xFF5,
+    TEXT_CODE_FACE_SHOW = 0xFF4,
+    TEXT_CODE_NO_SCROLL = 0xFF3,
+    TEXT_CODE_FLAG_FF2 = 0xFF2,
+    TEXT_CODE_SCROLL_HOLD = 0xFF1,
+    TEXT_CODE_WAIT_FIRST = 0xE25,
+    TEXT_CODE_WAIT_LAST = 0xE2F,
+    TEXT_CODE_FACE_FIRST = 0xE38,
+    TEXT_CODE_FACE_LAST = 0xFEF,
+    TEXT_CODE_SPACE = 0xFFD,
+};
+
+#include "text/text_bank.h"
+
+#endif

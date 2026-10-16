@@ -1,0 +1,17 @@
+/* cc1: -O2 */
+/* Unity build preserves retail compiler-unit and function order. */
+#include "private/retail_symbols.h"
+#include "private/ui.h"
+#include "sound/sound_ui.c"
+#include "sound/cd_audio.c"
+#include "runtime/debug_stubs.c"
+#include "game/farm_state.c"
+#include "game/farm_tables.c"
+#include "game/shop_restock.c"
+#include "ui/bg_tile.c"
+#include "ui/menu_window.c"
+#include "ui/ui.c"
+#include "ui/name_entry.c"
+#include "ui/ui_2.c"
+#include "ui/name_entry_2.c"
+#include "ui/ui_icons.c"

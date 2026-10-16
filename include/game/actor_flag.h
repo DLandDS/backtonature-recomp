@@ -1,0 +1,51 @@
+#ifndef BTNX_GAME_ANIMAL_TYPES_H
+#define BTNX_GAME_ANIMAL_TYPES_H
+#include "common.h"
+#include "psyq_gte.h"
+#include "psyq_libgpu.h"
+
+enum ActorFlag {
+    ACTOR_FLAG_FED_TODAY = (1 << 0),
+    ACTOR_FLAG_TALKED_TODAY = (1 << 1),
+    ACTOR_FLAG_BIT2 = (1 << 2),
+    ACTOR_FLAG_COW_CUE_TODAY = (1 << 3),
+    ACTOR_FLAG_FED_YESTERDAY = (1 << 4),
+    ACTOR_FLAG_TRAINED_TODAY = (1 << 5),
+    ACTOR_FLAG_PRIZE_WINNER = (1 << 6),
+    ACTOR_FLAG_DIED = (1 << 8),
+    ACTOR_FLAG_NAMING_PENDING = (1 << 9),
+    ACTOR_FLAG_IN_EVENT = (1 << 10),
+    ACTOR_FLAG_CUE_RUNNING = (1 << 11),
+    ACTOR_FLAG_BIT12 = (1 << 12),
+    ACTOR_FLAG_APPROACHING_PLAYER = (1 << 13),
+    ACTOR_FLAG_BIT14 = (1 << 14),
+    ACTOR_FLAG_ADULT = (1 << 15),
+    ACTOR_FLAG_BIT16 = (1 << 16),
+    ACTOR_FLAG_HELD = (1 << 17),
+    ACTOR_FLAG_CONTEST_ENTRANT = (1 << 18),
+    ACTOR_FLAG_DIED_OF_AGE = (1 << 19),
+    ACTOR_FLAG_BIT20 = (1 << 20),
+    ACTOR_FLAG_BIT21 = (1 << 21),
+    ACTOR_FLAG_BIT22 = (1 << 22),
+    ACTOR_FLAG_ADULT_SPRITE = (1 << 23),
+    ACTOR_FLAG_JUMPING = (1 << 24),
+    ACTOR_FLAG_CLAIMED = (1 << 25),
+    ACTOR_FLAG_BIT26 = (1 << 26),
+    ACTOR_FLAG_BIT27 = (1 << 27),
+    ACTOR_FLAG_BIT28 = (1 << 28),
+    ACTOR_FLAG_BIT29 = (1 << 29),
+    ACTOR_FLAG_BIT30 = (1 << 30),
+    ACTOR_FLAG_BIT31 = (1u << 31),
+};
+
+enum ActorAction {
+    ACTOR_ACTION_REST = 0,
+    ACTOR_ACTION_MOVING = 1,
+    ACTOR_ACTION_3 = 3,
+    ACTOR_ACTION_JUMPING = 4,
+    ACTOR_ACTION_5 = 5,
+    ACTOR_ACTION_CARRY_MOVING = 6,
+    ACTOR_ACTION_CARRY_REST = 0xF,
+};
+
+#endif

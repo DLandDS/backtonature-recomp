@@ -1,0 +1,59 @@
+#ifndef BTNX_GAME_CHARACTER_TYPES_H
+#define BTNX_GAME_CHARACTER_TYPES_H
+#include "common.h"
+#include "psyq_gte.h"
+#include "psyq_libgpu.h"
+#include "game/vec3.h"
+
+enum Character {
+    CHARACTER_UNNAMED_0 = 0,
+    CHARACTER_JEFF = 1,
+    CHARACTER_SASHA = 2,
+    CHARACTER_KAREN = 3,
+    CHARACTER_SAIBARA = 4,
+    CHARACTER_GRAY = 5,
+    CHARACTER_DOUG = 6,
+    CHARACTER_ANN = 7,
+    CHARACTER_DOCTOR = 8,
+    CHARACTER_ELLI = 9,
+    CHARACTER_PASTOR_CARTER = 10,
+    CHARACTER_CLIFF = 11,
+    CHARACTER_BASIL = 12,
+    CHARACTER_ANNA = 13,
+    CHARACTER_MARY = 14,
+    CHARACTER_BARLEY = 15,
+    CHARACTER_MAY = 16,
+    CHARACTER_MAYOR_THOMAS = 17,
+    CHARACTER_LILLIA = 18,
+    CHARACTER_RICK = 19,
+    CHARACTER_POPURI = 20,
+    CHARACTER_DUKE = 21,
+    CHARACTER_MANNA = 22,
+    CHARACTER_ELLEN = 23,
+    CHARACTER_GOTZ = 24,
+    CHARACTER_KAI = 25,
+    CHARACTER_UNNAMED_26 = 26,
+    CHARACTER_UNNAMED_27 = 27,
+    CHARACTER_HARRIS = 28,
+    CHARACTER_KANO = 29,
+    CHARACTER_GOURMET = 30,
+    CHARACTER_LOUIS = 31,
+    CHARACTER_GREG = 32,
+    CHARACTER_UNNAMED_33 = 33,
+    CHARACTER_STU = 34,
+    CHARACTER_WON = 35,
+    CHARACTER_CHILD = 36,
+    CHARACTER_COUNT = 37,
+    CHARACTER_PLAYER = 41,
+    CHARACTER_ALL_VILLAGERS = 42,
+};
+
+typedef s16 CharacterId;
+
+typedef struct VillagerStep {
+    s16 time;
+    u16 route;
+    LimitPair place;
+} VillagerStep;
+
+#endif
