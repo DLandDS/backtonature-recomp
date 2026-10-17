@@ -1,20 +1,37 @@
-# backtonature-decompiled
+# backtonature-recomp
 
-A matching decompilation of **Harvest Moon: Back to Nature** for the original
-PlayStation (USA, `SLUS-01115`).
+A native PC port project for **Harvest Moon: Back to Nature**, based on the
+matching decompilation of the original PlayStation game (USA, `SLUS-01115`).
 
-The C in `src/` compiles, with the game's own 1999 compiler, back into a
-`SLUS_011.15` executable that is **byte-identical** to the retail one. Every
-function is checked against the retail instructions, and the whole executable
-is checked against the retail file.
+The goal is to run the original game logic on Windows and Linux with minimal
+source changes. The existing source folder structure and file locations stay
+intact. Replacement PS1 SDK services and host code use C and SDL3.
+
+The matching PS1 build remains a separate reference path. The C in `src/`
+rebuilds the main `SLUS_011.15` executable with the original compiler; byte and
+per-function checks compare it against the retail executable. The native PC
+target does not yet run this source as a complete game.
 
 > **This repository contains no game data.** There is no executable, disc image,
 > text, graphics, audio or disassembly of the game here, and no Sony SDK files.
-> You need your own legally obtained copy of the game and your own PSY-Q SDK.
-> Everything game-derived is generated locally from your copy and is ignored
-> by git.
+> You supply your own legally obtained game data. The matching PS1 build also
+> requires your own PSY-Q SDK; the native tools do not. Everything game-derived
+> is generated locally from your copy and is ignored by git.
 
 ## Status
+
+### Native PC target
+
+Archive reading, software graphics/GTE, audio previews, and a title/new-game
+setup preview are available. These are separate host implementations and tools;
+the original game source is not yet linked into a complete native game.
+
+Playable gameplay, game save/load, and full PS1 behavior parity remain
+unfinished. Passing a tool or preview test does not establish full game parity.
+Detailed progress and the scope of each validation result are maintained in
+Notes, linked below.
+
+### Matching PS1 baseline
 
 | | |
 |---|---|
@@ -28,6 +45,18 @@ The ten `src/*.c` files are unity-build entry points. Each includes its domain
 modules in the original function order, which preserves the translation-unit
 boundaries the matching depends on. Compile those ten files, not the modules
 on their own.
+
+## Porting approach
+
+- Preserve the original game logic and source layout, changing only what is
+  needed for native execution.
+- Implement the PS1 SDK services used by the game in a separate compatibility
+  layer. SDL3 handles windows, events, controller input, audio output, and
+  framebuffer presentation; project code handles PS1-specific behavior.
+- Reuse the existing native resource readers, renderer, and audio work while
+  connecting original game code to host services.
+- Get the original game fully working and validate its behavior before planning
+  mod support or adding visual/gameplay enhancements.
 
 ## Source layout
 
@@ -49,13 +78,31 @@ on their own.
 | `config/`, `symbols/` | splat configuration, symbol addresses, linker layout |
 | `tools/`, `tests/` | build, matching and text-bank tools, with their tests |
 | `docker/` | the toolchain image |
+| `native/` | host runtime, resource readers, graphics/audio tools, and title preview |
 
 Readable names map to the original linker symbols through
 `include/private/retail_symbols.h` and `docs/retail-symbols.json`.
 `docs/identifier-renames.json` records every rename. Unresolved fields keep
 their offset names; an unknown meaning is not guessed.
 
-## What you need
+## Documentation
+
+Plans, checklists, phase progress, native build instructions, usage guides, and
+validation evidence are maintained in Notes through Dlands Connect:
+
+- [Project plan and checklist](https://notes.dlands.me/doc/rencana-native-port-harvest-moon-back-to-nature-AIFdhztqgl)
+- [Combined progress and guides](https://notes.dlands.me/doc/progres-native-port-semua-fase-FMuvm98uBP)
+
+Both documents have clickable contents by phase. Phase documentation is not
+duplicated in the repository. Code, tests, and source/symbol metadata remain
+here; generated local validation artifacts stay under the ignored `build/`.
+
+For native development, use a C11 compiler, CMake, and Python for the test/tools
+workflow. SDL3 is fetched from a pinned release; no PSY-Q installation is
+required. The synthetic runtime works without game data. Resource-based
+previews require the original files described in Notes.
+
+## Matching PS1 build requirements
 
 1. **The game.** A raw `.bin` (Mode 2/2352) dump of the US disc,
    *Harvest Moon: Back to Nature* (USA), `SLUS-01115`. A good dump of the
@@ -80,18 +127,7 @@ their offset names; an unknown meaning is not guessed.
 4. **Python 3.10+** on the host. It is only needed for
    `tools/extract_baserom.py`. Everything else runs in the container.
 
-## Building
-
-Native build instructions, runtime and viewer usage, phase progress, validation
-evidence, and known limitations are maintained in
-[Notes: Progress and guides](https://notes.dlands.me/doc/progres-native-port-semua-fase-FMuvm98uBP).
-The [project plan and checklist](https://notes.dlands.me/doc/rencana-native-port-harvest-moon-back-to-nature-AIFdhztqgl)
-are also maintained in Notes. Both documents provide clickable contents by phase.
-
-The SDL3 tools include a synthetic runtime, graphics/audio previews, and a
-title/new-game setup preview. Playable gameplay and save/load are not available;
-PS1 parity remains unverified. Test results apply to the revisions and scopes
-recorded in Notes.
+## Building the matching PS1 executable
 
 ### 1. Build the toolchain image
 
