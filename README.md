@@ -90,6 +90,7 @@ and remaining validation gates are in [the progress record](docs/phase03-progres
 The [native title preview](docs/native-title.md) includes original title assets
 and mapped music. Its intro/scenery and new-game setup extension passes the
 Windows Debug suites; playable gameplay and save/load remain separate phases.
+The setup window/text alignment also passes Windows Debug validation.
 [Phase-05 status](docs/phase05-progress.md) records the validation gates.
 
 ### 1. Build the toolchain image

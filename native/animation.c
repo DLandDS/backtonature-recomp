@@ -149,21 +149,30 @@ bool btn_animation_draw(const BtnAnimation *a, const BtnAnimationCursor *c,
 bool btn_text_draw(BtnDrawList *list, unsigned bucket, const uint16_t *words,
     size_t count, int x, int y, size_t *consumed)
 {
-    if (!list || !words || x < -8192 || x > 8192 || y < -8192 || y > 8192)
+    const BtnTextStyle style={254,0,0};
+    return btn_text_draw_styled(list,bucket,words,count,x,y,&style,consumed);
+}
+
+bool btn_text_draw_styled(BtnDrawList *list, unsigned bucket, const uint16_t *words,
+    size_t count, int x, int y, const BtnTextStyle *style, size_t *consumed)
+{
+    if (!list || !words || !style || style->clut_y>=BTN_VRAM_H
+        || style->spacing_x>16 || style->spacing_y>16
+        || x < -8192 || x > 8192 || y < -8192 || y > 8192)
         return SDL_SetError("Invalid text input/anchor");
     int start=x;
     for (size_t i=0; i<count; ++i) {
         uint16_t code=words[i];
         if (code==0xFFFFu) { if (consumed) *consumed=i+1; return true; }
-        if (code==0xFFFEu) { x=start; y+=12; }
-        else if (code==0xFFDu) x+=8;
+        if (code==0xFFFEu) { x=start; y+=12+(int)style->spacing_y; }
+        else if (code==0xFFDu) x+=8+(int)style->spacing_x;
         else if (code<=255u) {
             BtnPrimitive p={0};
             p.type=BTN_RECTANGLE; p.w=8; p.h=12;
             p.v[0]=(BtnVertex){x,y,(code&15)*8,((code>>4)&15)*12,128,128,128};
-            p.material.textured=true; p.material.page=14; p.material.clut=(uint16_t)((254u<<6)|56u);
+            p.material.textured=true; p.material.page=14; p.material.clut=(uint16_t)((style->clut_y<<6)|56u);
             if (!btn_draw_list_add(list,bucket,&p)) return false;
-            x+=8;
+            x+=8+(int)style->spacing_x;
         } else return SDL_SetError("Unsupported text control 0x%04X at word %zu",(unsigned)code,i);
         if (x>16384 || y>16384) return SDL_SetError("Text exceeds viewer coordinate range");
     }

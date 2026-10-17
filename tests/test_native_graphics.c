@@ -172,6 +172,16 @@ static void animations(BtnGraphics *g,BtnDrawList *list)
     CHECK(list->nodes[2].primitive.v[0].y==20);
     CHECK(!btn_text_draw(list,0,text,5,8,8,NULL));
     const uint16_t unsupported[]={0x400A,0xFFFF}; CHECK(!btn_text_draw(list,0,unsupported,2,8,8,NULL));
+    const BtnTextStyle style={252,1,2};
+    btn_draw_list_clear(list);
+    CHECK(btn_text_draw_styled(list,0,text,6,8,8,&style,&consumed));
+    CHECK(consumed==6 && list->count==3);
+    CHECK(list->nodes[0].primitive.material.clut==(uint16_t)((252u<<6)|56u));
+    CHECK(list->nodes[1].primitive.v[0].x==26 && list->nodes[2].primitive.v[0].y==22);
+    const BtnTextStyle invalid_styles[]={{512,0,0},{252,17,0},{252,0,17}};
+    for (unsigned i=0; i<3; ++i)
+        CHECK(!btn_text_draw_styled(list,0,text,6,8,8,&invalid_styles[i],NULL));
+    CHECK(!btn_text_draw_styled(list,0,text,6,8,8,NULL,NULL));
 }
 int main(void)
 {

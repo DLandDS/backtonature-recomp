@@ -5,9 +5,41 @@ Diperbarui: 17 Oktober 2026 (Asia/Jakarta). Baseline: `5645d68`.
 ## Status
 
 **Berjalan. Intro/fade, animasi latar/aktor dan setup New Game tervalidasi
-Windows Debug: 19/19 suite CTest lulus, 0 gagal, total 19,02 detik.
+Windows Debug: 19/19 suite CTest lulus, 0 gagal, total 22,89 detik,
+termasuk perubahan bingkai, palet teks dan caption keyboard.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
 tampilan/timing PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Lanjutan UI — tervalidasi Windows Debug
+
+- Bingkai bevel dan gradasi krem dipindahkan dari `src/ui/window_frame.c`;
+  panel nama/kalender mengikuti koordinat source `name_entry*.c`.
+- Startup asli memilih palet teks 3 (`runtime/main.c`); preview sebelumnya
+  memakai palet terang default. Setup kini membaca baris CLUT palet 3 dari
+  executable, sementara API grafik lama mempertahankan default sebelumnya.
+- Caption keyboard dibaca dari `0x800537B2` / `0x80053888`, dengan jarak (1,2),
+  termasuk label Mark/alphabet, Space dan OK. Latar diredupkan sebagaimana
+  `name_entry_step`/`name_sound_step`.
+- Tes ditambah untuk glyph kedua halaman keyboard, palet, tepi/gradasi bingkai
+  dan penolakan caption tanpa END/kontrol yang tidak didukung. Syntax Python,
+  fixture palet serta batas tabel asli diperiksa. Hasil terminal pengguna:
+  **19/19 lulus, 0 gagal, 22,89 detik**; mencakup suite C, CLI sintetis dan
+  data asli. Exit code build/CTest tidak dilaporkan terpisah.
+
+Empat capture tambahan (huruf 66 tick, simbol 66 tick, kalender 65 tick,
+setup selesai 106 tick) berhasil, masing-masing exit code 0. Capture diperiksa
+visual: kedua halaman keyboard, bingkai/gradasi, kalender dan ringkasan terbaca.
+Handoff tetap `names=1/1/1 birthday=0/0 flags=00002000`. Tidak ada kode C
+yang diubah setelah laporan tes. Bukti lokal di
+`build/native-validation/phase05-ui-windows-evidence.json` dan
+`phase05-ui-{naming,symbols,calendar,ready}.bmp/png`; audit source/data di
+`phase05-ui-source-audit.json`. Asset/capture tidak dikomit.
+
+Konfirmasi pengguna: logo yang terpotong pada screenshot adalah animasi turun
+yang sedang berlangsung, bukan bug logo. Gambar kedua memperlihatkan panel
+native sebelum perubahan UI ini. Uji desktop tersebut belum membuktikan
+kesetaraan dengan PS1. Cursor outline, panel konfirmasi/review, ikon musim,
+animasi/typing dialog serta timing masih menjadi sisa pekerjaan.
 
 ## Lanjutan setelah baseline
 
@@ -26,8 +58,9 @@ tampilan/timing PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
   cache animasi. Oracle Python independen kini menggambar latar/aktor bergerak.
   Suite C/CLI sintetis dan data lokal lulus, termasuk replay setup lengkap.
 
-Panel nama/kalender dan prompt merupakan adaptasi native yang memakai glyph
-asli, bukan port lengkap window/dialog retail. Trig host menggantikan
+Panel nama/kalender kini mengikuti bingkai, posisi, caption dan palet dari source;
+prompt dan sebagian layout tetap adaptasi native, bukan port lengkap dialog
+retail. Trig host menggantikan
 kuantisasi `ccos`/`csin`; penjadwalan transisi dan waktu muat juga belum
 dibandingkan PS1. Varian attract dan gameplay berada di batas fase 06.
 Keterbatasan ini tetap menjadi gerbang kesetaraan, bukan fitur yang diluluskan.
@@ -82,11 +115,11 @@ Sesuai aturan sesi, configure/build/CTest yang berpotensi berlog panjang
 dijalankan pengguna. Yang diminta hanya status/exit code dan baris error
 relevan bila gagal; log penuh tidak diperlukan.
 
-Hasil terminal pengguna, 17 Oktober 2026: **19/19 lulus, 0 gagal, total 19,02
+Hasil terminal pengguna, 17 Oktober 2026: **19/19 lulus, 0 gagal, total 22,89
 detik**. Empat suite title (`native-title`, `native-title-cli`,
 `native-title-tools`, `native-title-data`) semuanya lulus. Kelima belas suite
 sebelumnya ikut dijalankan dan lulus, termasuk runtime/input, archive, grafik
-dan audio. Hasil ini mencakup lanjutan intro/fade, animasi dan setup.
+dan audio. Hasil ini mencakup intro/fade, animasi, setup dan penyelarasan UI.
 Tidak ada kode C yang diubah setelah laporan tes tersebut.
 
 | Kelompok | Suite lulus | Jalur |
@@ -98,20 +131,21 @@ Tidak ada kode C yang diubah setelah laporan tes tersebut.
 | Title | 4 | State/clock, CLI/replay/oracle, audit tools dan data lokal |
 
 Exit code configure/build/CTest tidak dilaporkan terpisah. Laporan CTest
-menyatakan 100% lulus dan executable baru berhasil dijalankan. Tiga capture
-lokal tambahan (menu 43 tick, input nama 60 tick, setup selesai 106 tick)
-berhasil, masing-masing exit code 0. Framebuffer diperiksa visual: menu,
-grid nama dan ringkasan data terbaca, tanpa membuka window atau audio device.
+menyatakan 100% lulus dan executable baru berhasil dijalankan. Empat capture
+lokal tambahan (huruf/simbol 66 tick, kalender 65 tick, setup selesai 106 tick)
+berhasil, masing-masing exit code 0. Framebuffer diperiksa visual: keyboard,
+kalender dan ringkasan data terbaca, tanpa membuka window atau audio device.
 Log akhir mencatat `names=1/1/1 birthday=0/0 flags=00002000`, page 5.
 Ini tidak menggantikan uji desktop/controller atau uji dengar.
 
 Konfigurasi: Windows x64 Debug, generator Visual Studio 18 2026, **MSVC
 19.51.36260.0** (metadata compiler CMake), **SDL 3.2.10** (output executable).
 Bukti ringkas, hasil suite, hash source dan binary disimpan lokal di
-`build/native-validation/phase05-setup-windows-evidence.json`. Capture lokal:
-`build/native-validation/phase05-setup-{menu,naming,ready}.bmp` dan `.png`.
+`build/native-validation/phase05-ui-windows-evidence.json`. Capture lokal:
+`build/native-validation/phase05-ui-{naming,symbols,calendar,ready}.bmp` dan `.png`.
 Asset/capture tidak dikomit. Bukti baseline `ad23134` (19/19, 15,81 detik)
-tetap terpisah di `phase05-windows-evidence.json`.
+tetap terpisah di `phase05-windows-evidence.json`; baseline animasi/setup
+`28d9223` (19/19, 19,02 detik) di `phase05-setup-windows-evidence.json`.
 
 Linux ASan/UBSan dan capture PS1 belum diuji. Rencana asal di direktori induk
 tidak ditandai selesai. Intro, animasi latar/aktor, fade dan input nama kini

@@ -31,6 +31,8 @@ typedef struct {
     BtnSequence sequence;
     uint16_t effect_definitions[6][7];
     BtnNameLayout name_layout;
+    uint16_t name_captions[2][128];
+    unsigned text_clut_y;
     BtnTitleSetup setup;
     BtnAnimationCursor actors[6], actor_frames[14];
     unsigned actor_ticks[6], background[2], background_frame[2];

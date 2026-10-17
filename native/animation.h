@@ -25,5 +25,9 @@ bool btn_animation_draw(const BtnAnimation *animation, const BtnAnimationCursor 
  */
 bool btn_text_draw(BtnDrawList *list, unsigned bucket, const uint16_t *words,
     size_t count, int x, int y, size_t *consumed);
+/* Retail text_set_spacing and textClutRows, supplied as validated host values. */
+typedef struct { unsigned clut_y, spacing_x, spacing_y; } BtnTextStyle;
+bool btn_text_draw_styled(BtnDrawList *list, unsigned bucket, const uint16_t *words,
+    size_t count, int x, int y, const BtnTextStyle *style, size_t *consumed);
 
 #endif

@@ -126,6 +126,19 @@ static bool exe_read(SDL_IOStream *file, uint32_t address, void *out, size_t siz
         ? true : SDL_SetError("Cannot read title executable table");
 }
 
+static bool exe_caption(SDL_IOStream *file, uint32_t address, uint16_t *out, unsigned count)
+{
+    uint8_t word[2];
+    for (unsigned i=0; i<count; ++i) {
+        if (!exe_read(file,address+i*2,word,2)) return false;
+        out[i]=(uint16_t)le16(word);
+        if (out[i]==0xFFFF) return true;
+        if (out[i]>255 && out[i]!=0xFFD && out[i]!=0xFFFE)
+            return SDL_SetError("Unsupported title keyboard caption control");
+    }
+    return SDL_SetError("Title keyboard caption has no bounded END");
+}
+
 static bool read_sound(BtnArchive *archive, SDL_IOStream *exe, unsigned index,
     bool sequence, uint8_t **owned, size_t *size)
 {
@@ -203,8 +216,13 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
     if (ok) ok=btn_name_layout_valid(&t->name_layout)
         && exe_read(exe,UINT32_C(0x8005E290),tables,4);
     if (ok) t->random=btn_read_le32(tables);
+    /* runtime/main.c selects palette 3; text_glyph_sprite maps its CLUT row. */
+    if (ok) ok=exe_read(exe,UINT32_C(0x80049044)+3*2,tables,2);
+    if (ok) { t->text_clut_y=le16(tables); ok=t->text_clut_y<BTN_VRAM_H; }
+    if (ok) ok=exe_caption(exe,UINT32_C(0x800537B2),t->name_captions[0],128)
+        && exe_caption(exe,UINT32_C(0x80053888),t->name_captions[1],128);
     if (!SDL_CloseIO(exe)) return false;
-    if (!ok) return SDL_SetError("Title sound tables or resources are incompatible");
+    if (!ok) return SDL_SetError("Title sound/text tables or resources are incompatible");
     BtnImageBank font;
     if (!btn_image_bank_read(archive,0,0,&t->font_data,&font)
         || !btn_image_bank_upload(t->assets,&font,0,0,0,0,0)) return false;

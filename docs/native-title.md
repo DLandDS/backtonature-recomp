@@ -7,7 +7,9 @@ an overlay address to a host function pointer.
 
 The extension adds logo/copyright/Start entrance motion, fade transitions,
 scrolling scenery, randomized sprite actors and the full new-game setup order.
-Its Windows Debug validation passes all 19 CTest suites. A successful setup exposes a typed handoff;
+The animation/setup and source-based window/text rendering pass all 19
+Windows Debug CTest suites (latest run: 22.89 seconds).
+A successful setup exposes a typed handoff;
 farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
 window/dialog appearance, trig quantization and audio parity are separate gates.
 
@@ -32,8 +34,8 @@ not a reconstructed cancel branch from the original two-choice menu.
 
 New Game follows the audited order: player name, birthday, farm name, dog name,
 then a final review. Use arrows to move the original 14-column naming cursor,
-Z to choose a glyph, Shift cell to switch character sets, Space cell for spaces,
-X to delete, and Enter/End cell to request confirmation. Names contain at most
+Z to choose a glyph, Mark/alphabet cell to switch character sets, Space cell for spaces,
+X to delete, and Enter/OK cell to request confirmation. Names contain at most
 eight glyphs and a bounded END marker. An empty or initially all-space name
 cannot be confirmed. Yes accepts; No or X returns to editing. The initial
 player-name screen cannot be cancelled with an empty name, matching source.
@@ -145,3 +147,22 @@ with `(10,64)`, release at `(11,0)`, and open the menu at `(32,64)` followed by
 `(33,0)`. The complete generated setup replay is in `tests/check_title_cli.py`.
 Matching PS1 captures and input sequences are still required for phase
 acceptance. See [phase05-progress.md](phase05-progress.md).
+
+## Window/text source alignment
+
+The setup uses the bevel and cream gradient from `src/ui/window_frame.c`.
+Name and calendar panel coordinates follow `name_entry.c`/`name_entry_2.c`.
+Keyboard captions are read as bounded streams from executable addresses
+`0x800537B2` and `0x80053888`, with spacing (1,2). This preserves the original
+letters/symbols, Mark/alphabet, Space and OK labels rather than rebuilding them.
+`runtime/main.c` selects text palette 3; its CLUT row is read from the executable
+table at `0x80049044`, matching `text_glyph_sprite`. The existing graphics text
+API retains its white default; setup explicitly supplies the dark palette.
+The semitransparent black backdrop follows `name_entry_step`/`name_sound_step`.
+
+Help text still describes the native keyboard controls. Selection outlines,
+confirmation/review layout, dialog opening/typing, season icons and exact
+PS1 raster/timing remain comparison/implementation gates. Reconstructing window
+commands from source is not a hardware reference capture. CLI tests independently
+decode both keyboard pages, check their glyph pixels/CLUT, frame edges/gradient,
+and reject unsupported or unterminated executable captions.

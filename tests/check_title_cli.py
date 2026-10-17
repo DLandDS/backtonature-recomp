@@ -35,8 +35,13 @@ def fixture(folder):
     struct.pack_into('<H2h4B', animation, 3346, 0, 0, 0, 1, 255, 0, 0)
     images = image_fixture()
     palette = struct.pack('<I4H16H', (6<<24)|32, 896,254,16,1,*([0]+[32767]*15))
-    glyph_pixels = bytes([0x11])*(32*120*2)
-    glyph_bank = b'\x0d\0\x02\0'+palette+struct.pack('<I4H',(4<<24)|len(glyph_pixels),896,0,32,120)+glyph_pixels
+    dark_palette = struct.pack('<I4H16H', (6<<24)|32, 896,252,16,1,*([0]+[0x0C41]*15))
+    glyph_pixels = bytearray(32*120*2)
+    for y in range(120):
+        for x in range(128):
+            if (x//8+y//12+x+y)%3:
+                glyph_pixels[y*64+x//2] |= 1 << ((x%2)*4)
+    glyph_bank = b'\x0d\0\x03\0'+palette+dark_palette+struct.pack('<I4H',(4<<24)|len(glyph_pixels),896,0,32,120)+glyph_pixels
     member0 = glyph_bank+b'\0'*(8192-len(glyph_bank)) + animation + images
     bank = bytes(audio_fixture())
     seq = b'pQES\0\0\0\1\x01\xe0\x07\xa1\x20\x04\x02' + bytes([
@@ -70,6 +75,9 @@ def fixture(folder):
     write(0x8005599C,bytes([5,4,4,4,4,5,4,4,4,4,3,2,2,5]))
     write(0x800559AC,bytes([2,2,2,2,2,2,2,2,1,1,0,0,0,5]))
     write(0x800559D4,struct.pack('<28H',*range(0x60,0x60+28)))
+    write(0x80049044+6,struct.pack('<H',252))
+    for address,base in ((0x800537B2,0),(0x80053888,4)):
+        write(address,struct.pack('<7H',base,base+1,0xFFD,base+2,0xFFFE,base+3,0xFFFF))
     (folder/'SLUS_011.15').write_bytes(exe)
 
 
@@ -220,6 +228,49 @@ def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
     return b''.join(map(rgb, frame))
 
 
+def check_name_pixels(folder, capture, shifted=False):
+    """Decode font/table independently; verify the loaded palette, spacing and frame."""
+    frame = bmp(capture)
+    offsets = struct.unpack('<33I', (folder/'A_FILE.HDT').read_bytes())
+    with (folder/'A_FILE.BIN').open('rb') as stream:
+        stream.seek(offsets[0])
+        vram, _ = decode_bank(stream.read(8192))
+    exe = (folder/'SLUS_011.15').read_bytes()
+    load, = struct.unpack_from('<I', exe, 24)
+    clut_y, = struct.unpack_from('<H', exe, 2048+0x80049044+6-load)
+    address = 0x80053888 if shifted else 0x800537B2
+    words = struct.unpack_from('<128H', exe, 2048+address-load)
+    x,y,checked = 47,66,0
+    for code in words:
+        if code == 0xFFFF:
+            break
+        if code == 0xFFFE:
+            x,y = 47,y+14
+            continue
+        if code != 0xFFD:
+            assert code <= 255
+            for dy in range(12):
+                for dx in range(8):
+                    u,v = (code & 15)*8+dx, (code >> 4)*12+dy
+                    packed = vram[v*1024+896+u//4]
+                    index = (packed >> ((u%4)*4)) & 15
+                    color = vram[clut_y*1024+896+index]
+                    if color:
+                        offset = ((y+dy)*320+x+dx)*3
+                        assert frame[offset:offset+3] == rgb(color), (x+dx,y+dy,code)
+                        checked += 1
+        x += 9
+    assert checked > 0
+    def pixel(x,y):
+        return frame[(y*320+x)*3:(y*320+x+1)*3]
+    # Source window_frame_draw: upper/left highlight, lower/right shadow.
+    assert pixel(100,64) == rgb(31 | (29<<5) | (26<<10))
+    assert pixel(45,100) == rgb(31 | (29<<5) | (26<<10))
+    assert pixel(274,100) == rgb(23 | (17<<5) | (8<<10))
+    assert pixel(100,149) == rgb(23 | (17<<5) | (8<<10))
+    assert pixel(272,79) != pixel(272,147), 'Window fill must retain its vertical gradient'
+
+
 def check(executable, retail=None):
     with tempfile.TemporaryDirectory(prefix='btn-title-') as temporary:
         root = Path(temporary)
@@ -247,6 +298,16 @@ def check(executable, retail=None):
         # Original setup order: player, birthday, farm, dog, review, then a
         # typed handoff. Gameplay is not replaced by a successful dummy scene.
         events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,1),(35,1),(36,0),(37,16),(38,0)]
+        # Both keyboard pages use retail caption streams and palette 3.
+        for shifted in (False,True):
+            naming = list(events)
+            if shifted:
+                for tick,mask in [(59,4),(61,16)]:
+                    naming += [(tick,mask),(tick+1,0)]
+            script.write_bytes(b''.join(struct.pack('<II',*event) for event in naming))
+            capture = root/('symbols.bmp' if shifted else 'name.bmp')
+            run(executable,*common,'--frames','66','--input-script',script,'--output',capture)
+            check_name_pixels(source,capture,shifted)
         for tick,mask in [(59,16),(61,64),(63,16),(65,16),(67,16),(69,16),
                           (71,16),(73,64),(75,16),(77,16),(79,64),(81,16),(83,16)]:
             events += [(tick,mask),(tick+1,0)]
@@ -269,6 +330,15 @@ def check(executable, retail=None):
         if not retail:
             exe = root/'SLUS_011.15'
             original = exe.read_bytes()
+            for address,payload in ((0x80049044+6,struct.pack('<H',512)),
+                                    (0x800537B2,struct.pack('<H',0x400A)),
+                                    (0x80053888,bytes(256))):
+                broken = bytearray(original)
+                offset = 2048+address-0x80010000
+                broken[offset:offset+len(payload)] = payload
+                exe.write_bytes(broken)
+                assert 'incompatible' in run(executable,*common,code=1)
+            exe.write_bytes(original)
             exe.write_bytes(b'invalid')
             assert 'incompatible' in run(executable,*common,code=1)
             exe.write_bytes(original)

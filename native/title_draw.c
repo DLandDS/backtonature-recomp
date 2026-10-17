@@ -17,10 +17,38 @@ static bool rectangle(BtnTitle *t, unsigned bucket, int x, int y, int w, int h,
 
 static bool panel(BtnTitle *t, int x, int y, int w, int h)
 {
-    /* Text is bucket 0; the inner fill precedes the outer border in a
-     * head-inserted bucket so the border cannot paint over the panel. */
-    return rectangle(t,1,x+2,y+2,w-4,h-4,24,40,72)
-        && rectangle(t,1,x,y,w,h,200,216,232);
+    /* src/ui/window_frame.c: submission is reversed by the ordering table. */
+    const int pixels[6][3]={{w-2,0,0xF8DBAF},{w-2,1,0xDEBB84},{w-1,1,0xC89F60},
+        {1,h-2,0xE2C08B},{1,h-1,0xC89F60},{0,h-2,0xF8DBAF}};
+    const int lines[8][5]={{1,1,w-3,1,0xFDECD2},{1,1,1,h-2,0xFDECD2},
+        {w-2,1,w-2,h-2,0xBA8B47},{1,h-2,w-3,h-2,0xBA8B47},
+        {1,0,w-2,0,0xFDECD2},{0,1,0,h-2,0xFDECD2},
+        {w-1,1,w-1,h-2,0xBA8B47},{1,h-1,w-2,h-1,0xBA8B47}};
+    for (unsigned i=0; i<6; ++i) {
+        unsigned color=(unsigned)pixels[i][2];
+        if (!rectangle(t,1,x+pixels[i][0],y+pixels[i][1],1,1,
+            (uint8_t)(color>>16),(uint8_t)(color>>8),(uint8_t)color)) return false;
+    }
+    for (unsigned i=0; i<8; ++i) {
+        unsigned color=(unsigned)lines[i][4];
+        BtnPrimitive p={0}; p.type=BTN_LINE;
+        p.v[0]=(BtnVertex){x+lines[i][0],y+lines[i][1],0,0,
+            (uint8_t)(color>>16),(uint8_t)(color>>8),(uint8_t)color};
+        p.v[1]=p.v[0]; p.v[1].x=x+lines[i][2]; p.v[1].y=y+lines[i][3];
+        if (!btn_draw_list_add(t->list,1,&p)) return false;
+    }
+    BtnPrimitive fill={0}; fill.type=BTN_QUAD;
+    fill.v[0]=(BtnVertex){x+2,y+2,0,0,244,223,189};
+    fill.v[1]=fill.v[0]; fill.v[1].x=x+w-2;
+    fill.v[2]=(BtnVertex){x+2,y+h-2,0,0,249,207,143};
+    fill.v[3]=fill.v[2]; fill.v[3].x=x+w-2;
+    return btn_draw_list_add(t->list,1,&fill);
+}
+
+static bool draw_words(BtnTitle *t, const uint16_t *value, size_t count, int x, int y)
+{
+    const BtnTextStyle style={t->text_clut_y,0,0};
+    return btn_text_draw_styled(t->list,0,value,count,x,y,&style,NULL);
 }
 
 static uint16_t glyph(char ch)
@@ -48,7 +76,7 @@ static bool text(BtnTitle *t, int x, int y, const char *value)
     }
     if (*value) return SDL_SetError("Title UI label exceeds its bound");
     words[n++]=0xFFFF;
-    return btn_text_draw(t->list,0,words,n,x,y,NULL);
+    return draw_words(t,words,n,x,y);
 }
 
 static bool number(BtnTitle *t, int x, int y, unsigned value)
@@ -69,29 +97,25 @@ static bool mark(BtnTitle *t, int x, int y, int w, int h)
 static int cell_x(unsigned cell)
 {
     unsigned col=cell%14, gap=(col>=5 ? 1u : 0u)+(col>=10 ? 1u : 0u)+(col>=13 ? 2u : 0u);
-    return 50+(int)(col+gap)*9;
+    return 47+(int)(col+gap)*9;
 }
 
 static bool name_grid(BtnTitle *t)
 {
     BtnTitleSetup *s=&t->setup;
-    const char *label=s->stage==BTN_SETUP_PLAYER ? "Your name" : s->stage==BTN_SETUP_FARM ? "Farm name" : "Dog name";
-    if (!panel(t,20,18,280,28) || !panel(t,42,54,238,98)
-        || !text(t,28,26,label)
-        || !btn_text_draw(t->list,0,btn_setup_name(s),9,176,26,NULL)) return false;
-    for (unsigned cell=0; cell<84; ++cell) {
-        int x=cell_x(cell), y=66+(int)(cell/14)*14;
-        if (cell==13) { if (!text(t,x,y,"Shift")) return false; }
-        else if (cell==27) { if (!text(t,x,y,"Space")) return false; }
-        else if (cell==83) { if (!text(t,x,y,"End")) return false; }
-        else {
-            uint16_t words[2]={btn_name_character(&t->name_layout,cell,s->shift),0xFFFF};
-            if (words[0]!=0xFFFF && !btn_text_draw(t->list,0,words,2,x,y,NULL)) return false;
-        }
-    }
-    unsigned width=s->cell==13 || s->cell==27 ? 40u : s->cell==83 ? 24u : 8u;
-    return (s->confirming || mark(t,cell_x(s->cell),66+(int)(s->cell/14)*14,(int)width,12))
-        && text(t,24,218,"Z: choose  X: erase  Enter: End");
+    if (!panel(t,171,32,133,18) || !panel(t,45,64,230,86)) return false;
+    if (s->stage==BTN_SETUP_FARM) {
+        if (!draw_words(t,btn_setup_name(s),9,173,35) || !text(t,245,35,"Farm")) return false;
+    } else if (!text(t,173,35,"Name") || !draw_words(t,btn_setup_name(s),9,213,35)) return false;
+    const BtnTextStyle style={t->text_clut_y,1,2};
+    if (!btn_text_draw_styled(t->list,0,t->name_captions[s->shift],128,47,66,&style,NULL)) return false;
+    if (s->confirming) return true;
+    unsigned width=s->cell==13 ? (s->shift ? 72u : 36u) : s->cell==27 ? 45u : s->cell==83 ? 18u : 8u;
+    return mark(t,cell_x(s->cell),66+(int)(s->cell/14)*14,(int)width,12)
+        && panel(t,26,164,267,62) && text(t,30,168,"Arrows: Move cursor")
+        && text(t,30,182,"Z: Input   X: Erase / Back")
+        && text(t,30,196,"Enter / OK: Confirm name")
+        && text(t,30,210,"Mark / alphabet: Switch keys");
 }
 
 static bool yes_no(BtnTitle *t, const char *label, unsigned choice)
@@ -105,14 +129,17 @@ static bool calendar(BtnTitle *t)
 {
     const char *seasons[4]={"Spring","Summer","Fall","Winter"};
     BtnTitleSetup *s=&t->setup;
-    if (!panel(t,20,46,280,110) || !text(t,48,26,"Your birthday")) return false;
-    for (unsigned i=0; i<4; ++i) if (!text(t,28+(int)i*64,54,seasons[i])) return false;
-    for (unsigned i=0; i<30; ++i) if (!number(t,32+(int)(i%7)*38,78+(int)(i/7)*14,i+1)) return false;
+    if (!panel(t,171,32,133,18) || !text(t,173,35,"Birthday")
+        || !panel(t,20,56,279,103)) return false;
+    if (s->stage!=BTN_SETUP_BIRTHDAY_CONFIRM && (!panel(t,26,164,267,62)
+        || !text(t,30,168,"Arrows: Move cursor") || !text(t,30,182,"Z: Select   X: Back"))) return false;
+    for (unsigned i=0; i<4; ++i) if (!text(t,42+(int)i*64,60,seasons[i])) return false;
+    for (unsigned i=0; i<30; ++i) if (!number(t,30+(int)(i%7)*39,88+(int)(i/7)*14,i+1)) return false;
     if (s->stage==BTN_SETUP_SEASON)
-        return mark(t,28+(int)s->value*64,54,(int)SDL_strlen(seasons[s->value])*8,12);
-    if (s->stage==BTN_SETUP_DAY) return mark(t,32+(int)(s->value%7)*38,78+(int)(s->value/7)*14,16,12);
-    return mark(t,28+(int)s->game.season*64,54,(int)SDL_strlen(seasons[s->game.season])*8,12)
-        && mark(t,32+(int)(s->game.day%7)*38,78+(int)(s->game.day/7)*14,16,12);
+        return mark(t,42+(int)s->value*64,60,(int)SDL_strlen(seasons[s->value])*8,12);
+    if (s->stage==BTN_SETUP_DAY) return mark(t,30+(int)(s->value%7)*39,88+(int)(s->value/7)*14,16,12);
+    return mark(t,42+(int)s->game.season*64,60,(int)SDL_strlen(seasons[s->game.season])*8,12)
+        && mark(t,30+(int)(s->game.day%7)*39,88+(int)(s->game.day/7)*14,16,12);
 }
 
 static bool review(BtnTitle *t)
@@ -120,11 +147,11 @@ static bool review(BtnTitle *t)
     const char *seasons[4]={"Spring","Summer","Fall","Winter"};
     const BtnNewGame *g=&t->setup.game;
     return panel(t,28,44,264,112) && text(t,40,52,"Player")
-        && btn_text_draw(t->list,0,g->player,9,152,52,NULL)
+        && draw_words(t,g->player,9,152,52)
         && text(t,40,76,"Birthday") && text(t,152,76,seasons[g->season])
         && number(t,216,76,g->day+1)
-        && text(t,40,100,"Farm") && btn_text_draw(t->list,0,g->farm,9,152,100,NULL)
-        && text(t,40,124,"Dog") && btn_text_draw(t->list,0,g->dog,9,152,124,NULL);
+        && text(t,40,100,"Farm") && draw_words(t,g->farm,9,152,100)
+        && text(t,40,124,"Dog") && draw_words(t,g->dog,9,152,124);
 }
 
 static bool setup_draw(BtnTitle *t)
@@ -172,6 +199,10 @@ bool btn_title_draw(BtnTitle *t, uint32_t *pixels, size_t count)
     BtnTitleState *s=&t->state;
     if (!scenery(t)) return false;
     if (s->page==BTN_TITLE_SETUP || s->page==BTN_TITLE_READY) {
+        /* name_entry_step/name_sound_step draw a black semitransparent tile. */
+        BtnPrimitive dim={0}; dim.type=BTN_RECTANGLE; dim.w=BTN_WIDTH; dim.h=BTN_HEIGHT;
+        dim.material.semi=true;
+        if (!btn_draw_list_add(t->list,2,&dim)) return false;
         if (!setup_draw(t)) return false;
         if (s->page==BTN_TITLE_READY && (!panel(t,28,164,264,52)
             || !text(t,40,170,"Setup complete") || !text(t,40,184,"Gameplay requires phase 06")
