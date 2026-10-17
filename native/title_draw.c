@@ -204,6 +204,26 @@ static bool scenery(BtnTitle *t)
     return true;
 }
 
+static bool speech_draw(BtnTitle *t)
+{
+    const BtnTitleSpeech *s=&t->speech;
+    BtnRect box=t->dialog.box;
+    if (t->dialog.visible && !panel(t,box.x,box.y,box.w,box.h)) return false;
+    if (!btn_dialog_ready(&t->dialog,BTN_DIALOG_SPEECH) || s->closing) return true;
+    const BtnSpeechMessage *message=&t->speech_messages[s->message];
+    if (btn_speech_face(s,message)) {
+        /* text_draw_face: page 15, 8bpp, CLUT (0,490), UV (0,175). */
+        BtnPrimitive face={0}; face.type=BTN_RECTANGLE; face.w=face.h=80;
+        face.v[0]=(BtnVertex){26,84,0,175,128,128,128};
+        face.material.textured=true; face.material.page=0x68F; face.material.clut=0x7A80;
+        if (!btn_draw_list_add(t->list,0,&face)) return false;
+    }
+    uint16_t words[BTN_SPEECH_WORDS]; size_t count=btn_speech_visible(s,message,words);
+    const BtnTextStyle style={t->text_clut_y,0,2};
+    return btn_text_draw_styled(t->list,1,words,count,30,168,&style,NULL)
+        && (!s->waiting || btn_animation_draw(&t->ui_animation,&t->speech_wait,t->list,0,285,217));
+}
+
 bool btn_title_draw(BtnTitle *t, uint32_t *pixels, size_t count)
 {
     if (!t || !t->assets || !pixels || count<BTN_WIDTH*BTN_HEIGHT)
@@ -214,7 +234,9 @@ bool btn_title_draw(BtnTitle *t, uint32_t *pixels, size_t count)
     btn_draw_list_clear(t->list);
     BtnTitleState *s=&t->state;
     if (!scenery(t)) return false;
-    if (s->page==BTN_TITLE_SETUP || s->page==BTN_TITLE_READY) {
+    if (s->page==BTN_TITLE_SETUP && t->speech.active) {
+        if (!speech_draw(t)) return false;
+    } else if (s->page==BTN_TITLE_SETUP || s->page==BTN_TITLE_READY) {
         /* name_entry_step/name_sound_step draw a black semitransparent tile. */
         BtnPrimitive dim={0}; dim.type=BTN_RECTANGLE; dim.w=BTN_WIDTH; dim.h=BTN_HEIGHT;
         dim.material.semi=true;

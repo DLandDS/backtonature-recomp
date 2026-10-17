@@ -19,6 +19,9 @@ Earlier milestones remain recorded in `docs/phase05-progress.md`.
 A successful setup exposes a typed handoff;
 farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
 window/dialog appearance, trig quantization and audio parity are separate gates.
+The mayor dialog/portrait/reveal update passes the four title suites before a
+wait-icon correction; the corrected build passes targeted synthetic/real-data
+portrait/text/wait-indicator checks (build exit 0). Details are recorded below.
 The follow-up original setup question panels pass all four title suites
 (60.15 seconds, CTest exit 0). The other 15 suites were not repeated for this change.
 Video observations and the source/data mapping are recorded in
@@ -159,7 +162,7 @@ Path('build/title.input').write_bytes(b''.join(struct.pack('<II', *event) for ev
 For the new entrance/fade sequence, use a replay beginning with `(0,0)`, skip
 with `(10,64)`, release at `(11,0)`, and open the menu at `(32,64)` followed by
 `(33,0)`. The complete generated setup replay is `setup_replay()` in
-`tests/check_title_cli.py`; its current final snapshot is tick 426. Early presses
+`tests/check_title_cli.py`; its current final snapshot is tick 1090. Early presses
 during opening are deliberately ignored, so earlier setup replay timings no
 longer describe the animated dialog path.
 Matching PS1 captures and input sequences are still required for phase
@@ -211,3 +214,64 @@ keyboard/calendar, malformed message slots and missing cursor frames.
 Dialog unit tests cover integer geometry, open/close counts, blocked input,
 held-repeat continuity, reset and handoff gating. Replay checks cover partial
 opening/closing frames and complete NO_SCROLL text on the first ready frame.
+
+## Mayor conversation (Windows Debug validated)
+
+The follow-up adds the title overlay's five preface messages in order:
+member selected by `menuWindowValues[3]`, slots `0x3A2`, `0x397`, `0x3A5`,
+`0x3A4`, `0x3A3`. Welcome has two pages; the other slots ask about the player,
+birthday, farm and dog before their setup controls open. The two introductory
+messages run once on entering New Game; returning to an earlier setup stage
+repeats its question. Presses during the box animation are discarded.
+
+Each slot's first word is portrait page 104, followed by container 0D at +4.
+The five portrait banks are identical: 3,644 bytes, CLUT `(0,490,256,1)` and
+8bpp image `(960,175,40,80)`. The native loader confines writes to these
+rectangles and rejects changed pages, banks or text controls. It reads at
+most 128 words from slot +6144. No game text or portrait is embedded in code.
+The portrait draws at `(26,84,80,80)` using the original page/CLUT; text starts
+at `(30,168)` with spacing `(0,2)`. UI range 7 animates the wait indicator at
+`(285,217)`. The conversation uses the undimmed title scenery.
+
+The parser supports only the audited face prefix, glyphs/space/newline,
+PAGE_MARK/PAGE_END and END. A/B held while printing selects speed 0 (one
+stream word per simulation call); a fresh A/B press advances a page or closes
+the completed message. The default interval is read from `textSpeedIntervals[1]`
+at `0x80049052`, currently three VBlanks. Each nominal 30 Hz call contributes
+two VBlanks; control words can advance before the next glyph interval as in
+`ParseDialogTextStream`. Alternating elapsed intervals request text SFX 4.
+On keyboard, use Z or X to continue, and hold either to speed up printing.
+Return remains the name-grid confirmation key. A small desktop-only control
+hint appears below the dialog, outside headless framebuffer captures.
+The model advances only in simulation ticks and gates all setup input/handoff.
+
+This is a bounded source reconstruction. Async I/O stalls, exact first-glyph
+scheduling, hardware raster/audio and NTSC fractional timing need controlled
+PS1 comparison. Arbitrary faces, inserts, waits, choices and scrolling past
+four lines are rejected. The final review remains native, rather than slot
+`0x3AA`; the birthday header and native keyboard help remain separate gaps.
+
+New unit checks cover malformed streams, reveal speed, held input at page/end
+waits, portrait persistence and handoff gating. CLI checks decode portrait/text
+pixels independently, compare partial/full pages and all five messages, replay
+setup through tick 1090, and reject damaged portrait/text data. Source/data audit
+and Python syntax checks passed. The user reported all four title suites passed
+(227.58 seconds, CTest exit 0): unit 0.03, CLI 64.91, tools 0.15, real data
+162.48 seconds. The build exit code was not reported separately; the other 15
+suites were not repeated.
+
+Capture review then found a wrong wait icon: range 1 showed a heart.
+`DrawDialogUiLabelFromArg` defaults to range 7 when textWaitFrames is zero.
+The range is corrected and the CLI oracle now checks the indicator itself;
+the strengthened synthetic fixture gives ranges 1 and 7 different parts.
+The new oracle rejects the old real-data capture. The user rebuilt btn-native
+successfully (build exit 0), then two focused 180-frame captures passed: synthetic
+and real data, exit 0, with independent portrait/text/range-7 pixel checks.
+The real-data result was inspected visually and shows the hourglass. CTest was
+not repeated after this range-only correction; the four-suite result above
+belongs to the build before it. No C code changed after the successful rebuild.
+
+Local evidence: `build/native-validation/phase05-mayor-windows-evidence.json`,
+`phase05-mayor-initial-test.json`, `phase05-mayor-wait-audit.json`, and
+`phase05-mayor-wait-{synthetic,retail}.bmp/png`. Earlier partial/page/handoff
+captures retain the pre-correction image and are recorded as such.

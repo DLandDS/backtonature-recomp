@@ -6,6 +6,7 @@
 #include "image_bank.h"
 #include "title_setup.h"
 #include "title_dialog.h"
+#include "title_speech.h"
 
 #define BTN_TITLE_HZ 30u /* main_run_frame uses VSync(2); nominal NTSC rate. */
 typedef enum {
@@ -28,6 +29,7 @@ typedef struct {
     BtnAnimation animation, ui_animation;
     uint8_t *animation_data, *image_data, *music_data, *sequence_data, *effects_data, *font_data;
     uint8_t *ui_animation_data, *ui_image_data;
+    uint8_t *speech_image_data;
     BtnAudioBank music_bank, effects_bank;
     BtnAudio music, effects;
     BtnSequence sequence;
@@ -39,6 +41,10 @@ typedef struct {
     unsigned text_clut_y;
     BtnTitleSetup setup;
     BtnTitleDialog dialog;
+    BtnSpeechMessage speech_messages[BTN_SPEECH_MESSAGES];
+    BtnTitleSpeech speech;
+    BtnAnimationCursor speech_wait;
+    unsigned speech_interval;
     BtnAnimationCursor actors[6], actor_frames[14];
     unsigned actor_ticks[6], background[2], background_frame[2];
     uint32_t random;

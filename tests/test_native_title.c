@@ -34,6 +34,48 @@ static int setup_press(BtnTitleSetup *s, const BtnNameLayout *l, unsigned action
     return btn_setup_step(s,l,&input);
 }
 
+static void speech_checks(void)
+{
+    const uint16_t words[]={0xF87,0xFF7,0xFF4,0,1,0xFFC,0xFFB,0xFFFE,0xF87,0xFF7,0xFF4,2,0xFFFF};
+    BtnSpeechMessage m;
+    CHECK(btn_speech_message(&m,words,sizeof(words)/sizeof(*words),104));
+    uint16_t broken[sizeof(words)/sizeof(*words)];
+    for (unsigned i=0; i<4; ++i) {
+        memcpy(broken,words,sizeof(words));
+        broken[i==0 ? 0 : i==1 ? 3 : i==2 ? 6 : 12]=i==0 ? 0xF88 : i==1 ? 0x400A : 0;
+        CHECK(!btn_speech_message(&m,broken,sizeof(broken)/sizeof(*broken),104));
+    }
+    CHECK(!btn_speech_message(&m,words,3,104));
+    CHECK(!btn_speech_message(&m,words,BTN_SPEECH_WORDS+1,104));
+    uint16_t wide[37]={0xF87,0xFF7,0xFF4}; wide[36]=0xFFFF;
+    CHECK(!btn_speech_message(&m,wide,37,104));
+    const uint16_t tall[]={0xF87,0xFF7,0xFF4,0xFFFE,0xFFFE,0xFFFE,0xFFFE,0xFFFF};
+    CHECK(!btn_speech_message(&m,tall,8,104));
+    CHECK(btn_speech_message(&m,words,sizeof(words)/sizeof(*words),104));
+    BtnTitleSpeech s; BtnInput none={0},held={0},tap={0};
+    held.held=BTN_BIT(BTN_A); tap=held; tap.pressed=tap.held;
+    btn_speech_begin(&s,0,&m);
+    CHECK(s.active && !s.waiting && !s.shown);
+    for (unsigned i=0; i<3; ++i) (void)btn_speech_step(&s,&m,&none,3);
+    CHECK(s.shown==3 && btn_speech_face(&s,&m));
+    (void)btn_speech_step(&s,&m,&none,3); CHECK(s.shown==3);
+    CHECK(btn_speech_step(&s,&m,&none,3)==4 && s.shown==4);
+    (void)btn_speech_step(&s,&m,&held,3); CHECK(s.shown==5);
+    (void)btn_speech_step(&s,&m,&held,3); CHECK(s.waiting && !s.closing);
+    (void)btn_speech_step(&s,&m,&held,3); CHECK(!s.start && s.waiting);
+    uint16_t visible[BTN_SPEECH_WORDS];
+    CHECK(btn_speech_visible(&s,&m,visible)==3 && visible[0]==0 && visible[1]==1 && visible[2]==0xFFFF);
+    (void)btn_speech_step(&s,&m,&tap,3);
+    CHECK(s.start==8 && !s.waiting && !s.shown && btn_speech_face(&s,&m));
+    for (unsigned i=0; i<5; ++i) (void)btn_speech_step(&s,&m,&held,3);
+    CHECK(s.waiting && !s.closing);
+    (void)btn_speech_step(&s,&m,&held,3); CHECK(!s.closing);
+    tap.pressed=tap.held=BTN_BIT(BTN_B);
+    (void)btn_speech_step(&s,&m,&tap,3); CHECK(s.closing);
+    CHECK(btn_speech_visible(&s,&m,visible)==2 && visible[0]==2 && visible[1]==0xFFFF);
+    btn_speech_begin(&s,1,&m); CHECK(s.active && !s.closing && !s.start && !s.blip);
+}
+
 static void dialog_checks(void)
 {
     BtnTitleDialog d; btn_dialog_reset(&d);
@@ -100,6 +142,7 @@ static void dialog_checks(void)
     CHECK(btn_title_new_game(&title));
     title.dialog.phase=BTN_DIALOG_CLOSING; CHECK(!btn_title_new_game(&title));
     btn_dialog_reset(&title.dialog); CHECK(!title.dialog.visible && !title.dialog.frame);
+    title.speech.active=true; CHECK(!btn_title_new_game(&title));
 
     btn_setup_reset(&s); btn_dialog_reset(&d);
     BtnInput right={0}; right.held=BTN_BIT(BTN_RIGHT);
@@ -218,7 +261,7 @@ int main(void)
     advance(&state,500); CHECK(state.intro_stage>=3 && state.logo_y==0 && state.copyright_y==0);
     advance(&state,1300); CHECK(state.pending && state.target==BTN_TITLE_ATTRACT);
     advance(&state,21); CHECK(state.page==BTN_TITLE_ATTRACT);
-    setup_checks(); dialog_checks();
+    setup_checks(); dialog_checks(); speech_checks();
 
     /* Presentation rate must not change menu simulation; pause discards elapsed time. */
     const unsigned rates[]={30,60,144};

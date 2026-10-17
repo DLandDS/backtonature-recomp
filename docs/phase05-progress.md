@@ -7,8 +7,55 @@ Diperbarui: 17 Oktober 2026 (Asia/Jakarta). Baseline: `5645d68`.
 **Berjalan. Baseline `d9bc562`: intro/fade, animasi, setup, UI dan animasi dialog native
 tervalidasi Windows Debug: 19/19 lulus, 0 gagal, 60,02 detik, CTest exit 0.
 Lanjutan panel pertanyaan lulus empat suite title: 60,15 detik, CTest exit 0.
+Dialog wali kota lulus empat suite title (227,58 detik, CTest exit 0);
+koreksi indikator berikutnya lulus rebuild (exit 0) dan dua capture terarah.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
 visual/timing/audio PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Dialog wali kota — tervalidasi dengan koreksi indikator terarah
+
+Lanjutan setelah `75786a5` menambahkan dua pesan pembuka dan pertanyaan
+sebelum nama pemain, ulang tahun, farm dan anjing. Slot asli berurutan:
+`0x3A2`, `0x397`, `0x3A5`, `0x3A4`, `0x3A3`; Welcome memiliki dua halaman.
+Kelima bank portrait halaman 104 identik dan dibaca dari slot +4. Tidak ada
+asset/teks game yang ditanam ke source. Audit membuktikan persegi VRAM tidak
+bertumpuk dengan title, shared UI atau font.
+
+Model menghubungkan reveal teks, jeda halaman/akhir, tahan A/B untuk speed 0,
+portrait `(26,84,80,80)`, indikator tunggu UI range 7 dan SFX teks 4.
+Grid/setup input diblokir selama percakapan; handoff juga memerlukan speech
+nonaktif. Panel memakai animasi buka/tutup yang sudah ada. Teks dibatasi 128
+word, dua halaman dan empat baris per halaman; kontrol lain ditolak.
+
+Tes C dan oracle piksel CLI diperluas, termasuk gambar portrait rusak,
+kontrol tak didukung, END hilang dan tombol tahan saat menunggu. Replay baru
+berakhir pada frame 1090. Audit sumber/data, decoder fixture sintetis, urutan
+event dan syntax Python lulus. Hasil pengguna: **4/4 suite title lulus,
+227,58 detik, CTest exit 0**. Unit 0,03 detik, CLI 64,91, tools 0,15,
+data asli 162,48. Exit code build tidak dilaporkan terpisah; 15 suite lain
+tidak diulang.
+
+Lima capture tambahan berhasil (exit 0): teks parsial 86 frame, Welcome 180,
+halaman kedua 282, pertanyaan ulang tahun 550 dan handoff 1090. Portrait,
+teks dan handoff terlihat benar; log tetap
+`names=1/1/1 birthday=0/0 flags=00002000`.
+
+Pemeriksaan visual menemukan indikator tunggu salah: range 1 menggambar hati.
+Source `DrawDialogUiLabelFromArg` memilih range 7 saat textWaitFrames nol.
+Kode dan audit diperbaiki; fixture kini membedakan kedua range dan oracle
+indikator menolak capture lama. Pengguna melaporkan **rebuild btn-native
+exit 0**. Dua capture 180 frame setelah koreksi, sintetis dan data asli,
+berhasil (exit 0) dan lulus oracle portrait/teks/indikator range 7. Hasil data
+asli diperiksa visual dan menampilkan jam pasir. CTest tidak diulang setelah
+koreksi range; hasil empat suite di atas berlaku sebelum koreksi tersebut.
+Tidak ada perubahan C setelah rebuild yang berhasil.
+
+Bukti akhir lokal: `build/native-validation/phase05-mayor-windows-evidence.json`,
+`phase05-mayor-initial-test.json`, `phase05-mayor-wait-audit.json`, dan
+`phase05-mayor-wait-{synthetic,retail}.bmp/png`. Asset/capture tidak dikomit.
+Timing dibanding PS1, latensi I/O, format header ulang tahun dan review akhir
+native (slot retail `0x3AA` belum diport) tetap terbuka. Lihat juga
+[native-title.md](native-title.md#mayor-conversation-windows-debug-validated).
 
 ## Acuan video dan panel pertanyaan — tervalidasi Windows Debug
 

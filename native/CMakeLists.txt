@@ -36,7 +36,7 @@ target_link_libraries(btn_audio PUBLIC btn_runtime SDL3::SDL3-static)
 add_executable(btn-audio audio_main.c)
 target_link_libraries(btn-audio PRIVATE btn_audio)
 
-add_library(btn_title STATIC title.c title_setup.c title_draw.c title_dialog.c)
+add_library(btn_title STATIC title.c title_setup.c title_draw.c title_dialog.c title_speech.c)
 target_link_libraries(btn_title PUBLIC btn_graphics btn_audio)
 target_link_libraries(btn-native PRIVATE btn_title)
 

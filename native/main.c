@@ -262,6 +262,8 @@ static bool present(App *app)
                 || !SDL_SetRenderDrawColor(app->renderer,255,255,255,255)
                 || !SDL_RenderDebugText(app->renderer,4,188,
                     "Continue unavailable\nSave/load requires phase 07\nX/Return: back")) return false;
+        } else if (app->title.speech.active) {
+            if (!SDL_RenderDebugText(app->renderer,4,232,"Z/X: Next  Hold: faster")) return false;
         } else if (app->title.state.page!=BTN_TITLE_SETUP && app->title.state.page!=BTN_TITLE_READY
             && !SDL_RenderDebugText(app->renderer,4,224,"Enter: Start  Z: choose  X: back")) return false;
         return SDL_RenderPresent(app->renderer);
@@ -409,6 +411,7 @@ int main(int argc, char **argv)
                 bool confirmed=app.title.setup.confirming;
                 BtnDialogPhase dialog_before=app.title.dialog.phase;
                 BtnDialogKind dialog_kind=app.title.dialog.kind;
+                BtnTitleSpeech speech_before=app.title.speech;
                 if (!btn_title_tick(&app.title,&app.input)) goto cleanup;
                 if (before!=app.title.state.page || choice!=app.title.state.selection)
                     SDL_Log("title: tick=%u page=%u selection=%u %s",app.title.state.ticks-1,
@@ -419,6 +422,11 @@ int main(int argc, char **argv)
                 if (dialog_before!=app.title.dialog.phase || dialog_kind!=app.title.dialog.kind)
                     SDL_Log("title dialog: tick=%u kind=%u phase=%u",app.title.state.ticks-1,
                         (unsigned)app.title.dialog.kind,(unsigned)app.title.dialog.phase);
+                if (speech_before.active!=app.title.speech.active || speech_before.message!=app.title.speech.message
+                    || speech_before.start!=app.title.speech.start || speech_before.waiting!=app.title.speech.waiting)
+                    SDL_Log("title speech: tick=%u message=%u start=%u shown=%u waiting=%u active=%u",
+                        app.title.state.ticks-1,app.title.speech.message,app.title.speech.start,
+                        app.title.speech.shown,(unsigned)app.title.speech.waiting,(unsigned)app.title.speech.active);
                 const BtnNewGame *ready=btn_title_new_game(&app.title);
                 if (!ready) app.handoff_reported=false;
                 else if (!app.handoff_reported) {

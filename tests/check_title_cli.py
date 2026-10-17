@@ -54,6 +54,9 @@ def fixture(folder):
     struct.pack_into('<2H2h4B',ui,88,3,1,1,5,0,128,128,128)
     for index in range(44):
         struct.pack_into('<2H',ui,100+index*4,4 if index==43 else 2 if index==11 else 1,20 if index==43 else 0)
+    # Default dialog wait uses range 7, not the heart in range 1. Give them
+    # different fixture parts so a wrong range fails the independent oracle.
+    struct.pack_into('<2H',ui,100+7*4,2,20)
     for index in range(6):
         struct.pack_into('<H2h4B',ui,5024+index*10,0 if index<2 else 1,0,0,1,255,0,0)
     ui_images = bytearray(images)
@@ -72,6 +75,28 @@ def fixture(folder):
     for index in (0x3A6,0x3A7):
         struct.pack_into('<I',prompts,index*8192,0xFFFFFFFF)
         struct.pack_into('<6H',prompts,index*8192+6144,0xFF3,0,1,2,3,0xFFFF)
+    # A small 8bpp portrait with a transparent border, compressed to fit a slot.
+    pixels = bytes(0 if x<4 or x>=76 or y<4 or y>=76 else 1 for y in range(80) for x in range(80))
+    packed = bytearray(); pos=0
+    while pos<len(pixels):
+        end=pos+1
+        while end<len(pixels) and pixels[end]==pixels[pos] and end-pos<127: end+=1
+        packed += bytes([end-pos,pixels[pos]]); pos=end
+    portrait = b'\x0d\0\x02\0'+struct.pack('<I4H256H',(6<<24)|512,0,490,256,1,*([0]+[0x7C1F]*255))
+    portrait += struct.pack('<I4H',(1<<24)|len(packed),960,175,40,80)+packed+bytes((-len(packed))%4)
+    layouts = (((26,16),(28,30,5)),((18,),),((22,),),((29,),),((27,12),))
+    for index,(slot,pages) in enumerate(zip((0x3A2,0x397,0x3A5,0x3A4,0x3A3),layouts)):
+        words=[]
+        for page,lines in enumerate(pages):
+            if page: words += [0xFFC,0xFFB,0xFFFE]
+            words += [0xF87,0xFF7,0xFF4]
+            for row,length in enumerate(lines):
+                if row: words.append(0xFFFE)
+                words += [(index+row+column)%26 for column in range(length)]
+        words.append(0xFFFF)
+        struct.pack_into('<I',prompts,slot*8192,104)
+        prompts[slot*8192+4:slot*8192+4+len(portrait)] = portrait
+        struct.pack_into('<'+'H'*len(words),prompts,slot*8192+6144,*words)
     members[5] = prompts
     offsets = [0]
     for member in members:
@@ -98,6 +123,7 @@ def fixture(folder):
     write(0x800559AC,bytes([2,2,2,2,2,2,2,2,1,1,0,0,0,5]))
     write(0x800559D4,struct.pack('<28H',*range(0x60,0x60+28)))
     write(0x80049044+6,struct.pack('<H',252))
+    write(0x80049052,struct.pack('<H',3))
     for address,base in ((0x800537B2,0),(0x80053888,4)):
         write(address,struct.pack('<7H',base,base+1,0xFFD,base+2,0xFFFE,base+3,0xFFFF))
     write(0x8005175C,struct.pack('<9H',0xFFD,0,1,2,0xFFFE,0xFFD,3,4,0xFFFF))
@@ -351,15 +377,64 @@ def check_question_pixels(folder, capture, question):
         assert raw[(y*320+x)*3:(y*320+x+1)*3] == rgb(31 | (29<<5) | (26<<10)), 'Question frame missing'
 
 
+def check_speech_pixels(folder, capture, message, page=0, shown=None):
+    offsets = struct.unpack('<33I',(folder/'A_FILE.HDT').read_bytes())
+    member, = exe_words(folder,0x8005597C+6,1)
+    slot = (0x3A2,0x397,0x3A5,0x3A4,0x3A3)[message]
+    with (folder/'A_FILE.BIN').open('rb') as stream:
+        stream.seek(offsets[member]+slot*8192); data=stream.read(8192)
+    words=list(struct.unpack('<1024H',data[6144:])); words=words[:words.index(0xFFFF)+1]
+    if page: words=words[words.index(0xFFB)+2:]
+    end = words.index(0xFFC) if 0xFFC in words else words.index(0xFFFF)
+    selected = words[:end] if shown is None else words[:shown]
+    visible=[w for w in selected if w<=255 or w in (0xFFD,0xFFFE)]+[0xFFFF]
+    expected=text_pixels(folder,visible,30,168,0,2)
+    vram,_=decode_bank(data[4:6144])
+    for y in range(80):
+        for x in range(80):
+            packed=vram[(175+y)*1024+960+x//2]
+            color=vram[490*1024+((packed>>((x%2)*8))&255)]
+            if color: expected[26+x,84+y]=rgb(color)
+    check_pixels(capture,expected)
+    if shown is None:
+        check_wait_pixels(folder,capture)
+    if shown is not None:
+        full=text_pixels(folder,[w for w in words[:end] if w<=255 or w in (0xFFD,0xFFFE)]+[0xFFFF],30,168,0,2)
+        frame=bmp(capture)
+        assert any((x,y) not in expected and frame[(y*320+x)*3:(y*320+x+1)*3]!=color
+                   for (x,y),color in full.items()), 'Speech must remain partially revealed'
+
+
+def check_wait_pixels(folder, capture):
+    offsets = struct.unpack('<33I',(folder/'A_FILE.HDT').read_bytes())
+    with (folder/'A_FILE.BIN').open('rb') as stream:
+        stream.seek(offsets[0]+151552); animation=stream.read(5084)
+    ranges, = struct.unpack_from('<I',animation,28)
+    count, = struct.unpack_from('<H',animation,ranges+7*4)
+    frame=bmp(capture)
+    for index in range(count):
+        expected=ui_pixels(folder,7,index,285,217)
+        if expected and all(frame[(y*320+x)*3:(y*320+x+1)*3]==color for (x,y),color in expected.items()):
+            return
+    raise AssertionError('Default dialog wait indicator must use UI range 7')
+
+
 def setup_replay():
     events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,1),(35,1),(36,0),(37,16),(38,0)]
     # Early presses during opening must be discarded. Later presses wait for
     # each source-derived close/open cycle; season->day shares the help dialog.
     for tick,mask in [(59,16),(61,64),(63,16),(65,2),
-                      (80,16),(82,64),(120,16),(156,16),(162,16),(200,16),
-                      (234,16),(236,64),(274,16),(308,16),(310,64),(348,16),(386,16)]:
+                      (430,16),(432,64),(470,16),(600,16),(606,16),(644,16),
+                      (780,16),(782,64),(820,16),(970,16),(972,64),(1010,16),(1050,16)]:
         events += [(tick,mask),(tick+1,0)]
-    return events
+    # Hold to speed up text, release, then press at the page/end wait. No held
+    # press may advance both the dialog and the following setup control.
+    events += [(80,16),(180,0),(182,16),(282,0),(284,16),(285,0),
+               (314,16),(370,0),(372,16),(373,0),
+               (500,16),(550,0),(552,16),(553,0),
+               (674,16),(730,0),(732,16),(733,0),
+               (850,16),(920,0),(922,16),(923,0)]
+    return sorted(events)
 
 
 def check(executable, retail=None):
@@ -392,34 +467,40 @@ def check(executable, retail=None):
         # Original setup order: player, birthday, farm, dog, review, then a
         # typed handoff. Gameplay is not replaced by a successful dummy scene.
         events = setup_replay()
+        for frames,message,page,shown in ((86,0,0,9),(180,0,0,None),(282,0,1,None),
+                                          (370,1,0,None),(550,2,0,None),(730,3,0,None),(920,4,0,None)):
+            script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
+            capture = root/f'speech-{frames}.bmp'
+            run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
+            check_speech_pixels(source,capture,message,page,shown)
         # Both keyboard pages use retail caption streams and palette 3.
         for shifted in (False,True):
-            naming = [event for event in events if event[0]<80]
+            naming = [event for event in events if event[0]<430]
             if shifted:
-                for tick,mask in [(80,4),(82,16)]:
+                for tick,mask in [(430,4),(432,16)]:
                     naming += [(tick,mask),(tick+1,0)]
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in naming))
             capture = root/('symbols.bmp' if shifted else 'name.bmp')
-            run(executable,*common,'--frames','86','--input-script',script,'--output',capture)
+            run(executable,*common,'--frames','436','--input-script',script,'--output',capture)
             check_name_pixels(source,capture,shifted)
         # Opening and closing use the integer source geometry. Full dialog text
         # is absent while animating; these snapshots are before any choice.
-        for frames,edge_y in ((65,193),(84,170)):
+        for frames,edge_y in ((65,193),(434,170)):
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
             capture = root/f'box-{frames}.bmp'
             run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
             raw = bmp(capture)
             assert raw[(edge_y*320+100)*3:(edge_y*320+101)*3] == rgb(31 | (29<<5) | (26<<10))
             assert raw[(164*320+100)*3:(164*320+101)*3] != rgb(31 | (29<<5) | (26<<10))
-        for frames in (112,154,160,192):
+        for frames in (462,594,604,636):
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
             capture = root/f'prompt-{frames}.bmp'
             run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
-            check_question_pixels(source,capture,0 if frames==112 else 1)
-            if frames in (112,192):
+            check_question_pixels(source,capture,0 if frames==462 else 1)
+            if frames in (462,636):
                 offsets = struct.unpack('<33I',(source/'A_FILE.HDT').read_bytes())
                 member, = exe_words(source,0x8005597C+6,1)
-                slot = 0x3A6 if frames==112 else 0x3A7
+                slot = 0x3A6 if frames==462 else 0x3A7
                 with (source/'A_FILE.BIN').open('rb') as stream:
                     stream.seek(offsets[member]+slot*8192+6144)
                     words = struct.unpack('<64H',stream.read(128))
@@ -427,44 +508,47 @@ def check(executable, retail=None):
                 expected = text_pixels(source,words[1:],30,168)
                 expected.update(text_pixels(source,exe_words(source,0x8005175C,16),147,78))
                 expected.update(ui_pixels(source,11,1,153,84))
-                if frames==192:
+                if frames==636:
                     expected.update(ui_pixels(source,43,0,253,35))
                 check_pixels(capture,expected)
                 # The underlying keyboard/calendar is hidden during confirmation.
                 raw = bmp(capture)
-                y = 64 if frames==112 else 56
+                y = 64 if frames==462 else 56
                 assert raw[(y*320+100)*3:(y*320+101)*3] != rgb(31 | (29<<5) | (26<<10))
             else:
                 expected = {}
                 for season in range(4):
                     expected.update(ui_pixels(source,43,season,30+season*64,60))
-                if frames==160:
+                if frames==604:
                     expected.update(ui_pixels(source,43,0,253,35))
-                expected.update(ui_pixels(source,11,1,36,66 if frames==154 else 94))
+                expected.update(ui_pixels(source,11,1,36,66 if frames==594 else 94))
                 check_pixels(capture,expected)
-        for frames,question in ((234,2),(308,3)):
+        for frames,question in ((780,2),(970,3)):
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
             capture = root/f'question-{frames}.bmp'
             run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
             check_question_pixels(source,capture,question)
         # Moving to No uses the second choice row without accepting the name.
-        no_events = [event for event in events if event[0]<116]+[(116,2),(117,0)]
+        no_events = [event for event in events if event[0]<466]+[(466,2),(467,0)]
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in no_events))
         capture = root/'name-no.bmp'
-        run(executable,*common,'--frames','119','--input-script',script,'--output',capture)
+        run(executable,*common,'--frames','469','--input-script',script,'--output',capture)
         check_pixels(capture,ui_pixels(source,11,1,153,96))
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in events))
-        output = run(executable,*common,'--frames','426','--input-script',script,'--output',root/'setup.bmp')
+        output = run(executable,*common,'--frames','1090','--input-script',script,'--output',root/'setup.bmp')
         for stage in (1,2,3,4,5,6,7):
             assert f'stage={stage} ' in output, output[-1500:]
         assert 'tick=35 page=' not in output, 'Held menu direction must not repeat'
-        assert 'title stopped: ticks=426 page=5 selection=0' in output
+        assert 'title stopped: ticks=1090 page=5 selection=0' in output
         for tick in (59,61,63,65):
             assert f'title setup: tick={tick} ' not in output, 'Opening input must be discarded'
-        for line in ('tick=75 kind=1 phase=2','tick=82 kind=1 phase=3',
-                     'tick=111 kind=3 phase=2','tick=397 kind=0 phase=0'):
+        for line in ('tick=75 kind=6 phase=2','tick=432 kind=1 phase=3',
+                     'tick=461 kind=3 phase=2','tick=1061 kind=0 phase=0'):
             assert 'title dialog: '+line in output, line
         assert 'New Game setup ready; gameplay requires phase 06' in output
+        assert 'message=0 start=49 ' in output, 'Welcome must advance to its second page'
+        for message in range(5):
+            assert f'message={message} ' in output, 'Missing mayor dialog'
         assert 'title handoff: names=1/1/1 birthday=0/0 flags=00002000' in output
         # The completed setup screen must contain pixels, not an empty capture.
         assert len(set(bmp(root/'setup.bmp'))) > 3
@@ -481,6 +565,7 @@ def check(executable, retail=None):
                                     (0x800537B2,struct.pack('<H',0x400A)),
                                     (0x80051A94,struct.pack('<H',0x400A)),
                                     (0x80051AAA,bytes(30)),
+                                    (0x80049052,struct.pack('<H',6)),
                                     (0x80053888,bytes(256))):
                 broken = bytearray(original)
                 offset = 2048+address-0x80010000
@@ -498,6 +583,11 @@ def check(executable, retail=None):
                                    (offsets[5]+0x3A6*8192+6144,bytes(2)),
                                    (offsets[5]+0x3A7*8192+6146,struct.pack('<H',0x400A)),
                                    (offsets[5]+0x3A7*8192+6146,bytes(126)),
+                                   (offsets[5]+0x3A2*8192,bytes(4)),
+                                   (offsets[5]+0x3A2*8192+6144,struct.pack('<H',0xF88)),
+                                   (offsets[5]+0x397*8192+6144+6,struct.pack('<H',0x400A)),
+                                   (offsets[5]+0x3A3*8192+6144,bytes(256)),
+                                   (offsets[5]+0x3A2*8192+12,struct.pack('<H',1)),
                                    (151552+100+11*4,struct.pack('<H',1))):
                 broken = bytearray(data)
                 broken[offset:offset+len(payload)] = payload

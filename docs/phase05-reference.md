@@ -56,6 +56,9 @@ visual. Bukti lokal: `build/native-validation/phase05-questions-windows-evidence
 Asset/capture tetap lokal dan tidak dikomit. Platform Windows x64 Debug,
 Visual Studio 18 2026, MSVC 19.51.36260.0, SDL 3.2.10.
 
-Port dialog wali kota/portrait/reveal teks, format header ulang tahun dan
-review native tetap pekerjaan terpisah. Gerbang kelulusan 5.7 masih memerlukan
+Lanjutan dialog wali kota/portrait/reveal teks telah divalidasi: empat suite
+title lulus (227,58 detik, CTest exit 0), lalu koreksi indikator lulus rebuild
+(exit 0) dan dua capture terarah. Lihat
+[native-title.md](native-title.md#mayor-conversation-windows-debug-validated).
+Format header ulang tahun dan review native tetap terbuka. Gerbang 5.7 memerlukan
 urutan input yang tercatat serta pengukuran pada acuan yang terkontrol.

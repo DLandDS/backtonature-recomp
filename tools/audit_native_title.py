@@ -111,6 +111,33 @@ def audit(directory):
                 raise ValueError('Unsupported setup prompt control')
             result['setup_prompts'].append(dict(member=prompt_member,slot=slot,text_offset=6144,
                 words_including_end=end,sha256=hashlib.sha256(raw_text[:end*2]).hexdigest()))
+        result['mayor_messages'] = []
+        portrait_hash=None
+        for slot in (0x3A2,0x397,0x3A5,0x3A4,0x3A3):
+            origin=slot*8192
+            if messages.read(origin,4)!=struct.pack('<I',104):
+                raise ValueError('Mayor message has an unsupported portrait page')
+            image=inspect_container_0d(MemberView(stream,messages.start+origin+4,6140))
+            if [b['vram_rectangle_words'] for b in image['blocks']]!=[[0,490,256,1],[960,175,40,80]]:
+                raise ValueError('Mayor portrait requires the audited CLUT/image rectangles')
+            image_data=messages.read(origin+4,image['byte_size'])
+            identity=hashlib.sha256(image_data).hexdigest()
+            if portrait_hash and identity!=portrait_hash:
+                raise ValueError('Mayor messages do not share one portrait')
+            portrait_hash=identity
+            words=struct.unpack('<128H',messages.read(origin+6144,256)); end=words.index(0xFFFF)+1
+            supported={0xF87,0xFF7,0xFF4,0xFFC,0xFFB,0xFFFE,0xFFD,0xFFFF}
+            if any(w>255 and w not in supported for w in words[:end]):
+                raise ValueError('Mayor message uses an unsupported control')
+            result['mayor_messages'].append(dict(member=prompt_member,slot=slot,portrait_page=104,
+                image_bytes=image['byte_size'],portrait_sha256=identity,words_including_end=end,
+                pages=words[:end].count(0xFFC)+1,
+                text_sha256=hashlib.sha256(messages.read(origin+6144,end*2)).hexdigest()))
+        result['mayor_rendering']=dict(portrait_box=[26,84,80,80],page=0x68F,clut=0x7A80,
+            text_position=[30,168],spacing=[0,2],speed_vblanks=struct.unpack('<H',exe.read(0x80049052,2))[0],
+            wait_icon_range=7,wait_icon_position=[285,217],
+            sources=['src/text/dialog.c','src/ui/menu_window.c','src/ui/ui.c'],
+            limit='Bounded five-message path; final review, arbitrary dialog controls and PS1 timing parity are separate')
     if exe.read(0x80049296+26*2,2) != bytes([53,54]):
         raise ValueError('Title sound request 26 does not select bank 53 / sequence 54')
     result['sound'] = dict(request=26,bank=53,sequence=54,effects_bank=0,effects_ids=[0,1,2,5],

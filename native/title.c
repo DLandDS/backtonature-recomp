@@ -185,6 +185,37 @@ static bool read_sound(BtnArchive *archive, SDL_IOStream *exe, unsigned index,
     *owned=data; return true;
 }
 
+static bool read_speech(BtnTitle *t, BtnArchive *archive, unsigned member)
+{
+    const unsigned slots[BTN_SPEECH_MESSAGES]={0x3A2,0x397,0x3A5,0x3A4,0x3A3};
+    size_t image_size=0;
+    for (unsigned i=0; i<BTN_SPEECH_MESSAGES; ++i) {
+        uint8_t slot[8192]; uint16_t words[BTN_SPEECH_WORDS]; BtnImageBank bank;
+        if (!btn_archive_read(archive,member,slots[i]*8192,8192,slot,sizeof(slot))) return false;
+        /* DecodeMessageSlotContainer starts at slot+4, not at slot's page ID. */
+        if (btn_read_le32(slot)!=104 || !btn_image_bank_parse(&bank,slot+4,6140) || bank.count!=2)
+            return SDL_SetError("Mayor message requires the audited portrait page");
+        const BtnRect expected[2]={{0,490,256,1},{960,175,40,80}};
+        for (unsigned n=0; n<2; ++n) {
+            BtnImageBlock b;
+            if (!btn_image_bank_block(&bank,n,&b) || b.rect.x!=expected[n].x || b.rect.y!=expected[n].y
+                || b.rect.w!=expected[n].w || b.rect.h!=expected[n].h || (b.flags&3)!=(n ? 1u : 2u))
+                return SDL_SetError("Mayor portrait would overwrite unrelated VRAM");
+        }
+        if (!i) {
+            image_size=bank.consumed; t->speech_image_data=malloc(image_size);
+            if (!t->speech_image_data) return SDL_SetError("Cannot allocate mayor portrait");
+            memcpy(t->speech_image_data,slot+4,image_size);
+            if (!btn_image_bank_upload(t->assets,&bank,0,0,0,0,0)) return false;
+        } else if (bank.consumed!=image_size || memcmp(t->speech_image_data,slot+4,image_size))
+            return SDL_SetError("Mayor messages require one shared portrait image");
+        for (unsigned n=0; n<BTN_SPEECH_WORDS; ++n) words[n]=(uint16_t)le16(slot+6144+n*2);
+        if (!btn_speech_message(&t->speech_messages[i],words,BTN_SPEECH_WORDS,104))
+            return SDL_SetError("Unsupported or unterminated mayor message");
+    }
+    return true;
+}
+
 bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
 {
     if (!t || t->assets || !archive || !archive->bin || !directory)
@@ -250,10 +281,13 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
     const unsigned question_words[4]={11,15,12,11};
     for (unsigned i=0; ok && i<4; ++i)
         ok=exe_caption(exe,questions[i],t->setup_questions[i],question_words[i]);
+    if (ok) ok=exe_read(exe,UINT32_C(0x80049052),tables,2);
+    if (ok) { t->speech_interval=le16(tables); ok=t->speech_interval<=5; }
     if (!SDL_CloseIO(exe)) return false;
     if (!ok) return SDL_SetError("Title sound/text tables or resources are incompatible");
     if (!setup_prompt(archive,prompt_member,0x3A6,t->setup_prompts[0])
         || !setup_prompt(archive,prompt_member,0x3A7,t->setup_prompts[1])) return false;
+    if (!read_speech(t,archive,prompt_member)) return false;
     if (!btn_animation_read(archive,0,151552,&t->ui_animation_data,&t->ui_animation)) return false;
     if (t->ui_animation.consumed!=5084 || t->ui_animation.ranges!=44
         || le16(t->ui_animation.data+t->ui_animation.section[3]+11*4)<2
@@ -279,6 +313,7 @@ void btn_title_close(BtnTitle *t)
     free(t->animation_data); free(t->image_data); free(t->music_data);
     free(t->sequence_data); free(t->effects_data); free(t->font_data);
     free(t->ui_animation_data); free(t->ui_image_data);
+    free(t->speech_image_data);
     free(t->list); free(t->assets); free(t->graphics);
     *t=(BtnTitle){0};
 }
@@ -323,7 +358,7 @@ static bool animate(BtnTitle *t)
 const BtnNewGame *btn_title_new_game(const BtnTitle *t)
 {
     return t && t->state.page==BTN_TITLE_READY && !t->state.pending
-        && !t->state.fade_level && t->dialog.phase==BTN_DIALOG_HIDDEN
+        && !t->state.fade_level && !t->speech.active && t->dialog.phase==BTN_DIALOG_HIDDEN
         && t->setup.stage==BTN_SETUP_DONE ? &t->setup.game : NULL;
 }
 
@@ -334,14 +369,37 @@ bool btn_title_tick(BtnTitle *t, const BtnInput *input)
     int sound=btn_title_step(&t->state,input);
     if (before==BTN_TITLE_READY && t->state.page==BTN_TITLE_INTRO) {
         reset_actors(t); btn_setup_reset(&t->setup); btn_dialog_reset(&t->dialog);
+        t->speech=(BtnTitleSpeech){0};
         btn_audio_init(&t->music); btn_audio_stop(&t->effects);
         if (!btn_sequence_open(&t->sequence,t->sequence_data,t->sequence.size,true)) return false;
     }
     if (before!=BTN_TITLE_SETUP && t->state.page==BTN_TITLE_SETUP) {
         btn_setup_reset(&t->setup); btn_dialog_reset(&t->dialog);
+        btn_speech_begin(&t->speech,0,&t->speech_messages[0]);
+        t->speech_wait=(BtnAnimationCursor){0}; t->speech_wait.range=BTN_SPEECH_WAIT_RANGE;
     }
     else if (t->state.page==BTN_TITLE_SETUP && !t->state.pending && !t->state.fade_level) {
-        sound=btn_dialog_setup_step(&t->dialog,&t->setup,&t->name_layout,input);
+        if (t->speech.active) {
+            btn_setup_observe_input(&t->setup,input);
+            if (btn_dialog_ready(&t->dialog,BTN_DIALOG_SPEECH) && !t->speech.closing)
+                sound=btn_speech_step(&t->speech,&t->speech_messages[t->speech.message],input,t->speech_interval);
+            btn_dialog_tick(&t->dialog,t->speech.closing ? BTN_DIALOG_NONE : BTN_DIALOG_SPEECH);
+            if (t->speech.waiting && !t->speech.closing) {
+                if (!btn_animation_tick(&t->ui_animation,&t->speech_wait)) return false;
+            } else { t->speech_wait=(BtnAnimationCursor){0}; t->speech_wait.range=BTN_SPEECH_WAIT_RANGE; }
+            if (t->speech.closing && t->dialog.phase==BTN_DIALOG_HIDDEN) {
+                if (!t->speech.message) btn_speech_begin(&t->speech,1,&t->speech_messages[1]);
+                else t->speech.active=false;
+            }
+        } else {
+            BtnSetupStage stage=t->setup.stage;
+            sound=btn_dialog_setup_step(&t->dialog,&t->setup,&t->name_layout,input);
+            if (stage!=t->setup.stage) {
+                int message=t->setup.stage==BTN_SETUP_PLAYER ? 1 : t->setup.stage==BTN_SETUP_SEASON ? 2
+                    : t->setup.stage==BTN_SETUP_FARM ? 3 : t->setup.stage==BTN_SETUP_DOG ? 4 : -1;
+                if (message>=0) btn_speech_begin(&t->speech,(unsigned)message,&t->speech_messages[message]);
+            }
+        }
         if (t->setup.stage==BTN_SETUP_DONE && t->dialog.phase==BTN_DIALOG_HIDDEN) {
             for (unsigned i=0; i<4; ++i) t->setup.game.seeds[i]=(uint16_t)random_range(t,65535);
             if (!btn_audio_volume(&t->music,1,BTN_AUDIO_RATE*10/BTN_TITLE_HZ)) return false;
