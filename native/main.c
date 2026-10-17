@@ -407,6 +407,8 @@ int main(int argc, char **argv)
                 BtnTitlePage before=app.title.state.page; unsigned choice=app.title.state.selection;
                 BtnSetupStage setup_before=app.title.setup.stage;
                 bool confirmed=app.title.setup.confirming;
+                BtnDialogPhase dialog_before=app.title.dialog.phase;
+                BtnDialogKind dialog_kind=app.title.dialog.kind;
                 if (!btn_title_tick(&app.title,&app.input)) goto cleanup;
                 if (before!=app.title.state.page || choice!=app.title.state.selection)
                     SDL_Log("title: tick=%u page=%u selection=%u %s",app.title.state.ticks-1,
@@ -414,6 +416,9 @@ int main(int argc, char **argv)
                 if (setup_before!=app.title.setup.stage || confirmed!=app.title.setup.confirming)
                     SDL_Log("title setup: tick=%u stage=%u length=%u confirming=%u",app.title.state.ticks-1,
                         (unsigned)app.title.setup.stage,app.title.setup.length,(unsigned)app.title.setup.confirming);
+                if (dialog_before!=app.title.dialog.phase || dialog_kind!=app.title.dialog.kind)
+                    SDL_Log("title dialog: tick=%u kind=%u phase=%u",app.title.state.ticks-1,
+                        (unsigned)app.title.dialog.kind,(unsigned)app.title.dialog.phase);
                 const BtnNewGame *ready=btn_title_new_game(&app.title);
                 if (!ready) app.handoff_reported=false;
                 else if (!app.handoff_reported) {

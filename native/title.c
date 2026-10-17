@@ -146,8 +146,8 @@ static bool setup_prompt(BtnArchive *archive, unsigned member, unsigned slot, ui
         || btn_read_le32(header)!=UINT32_MAX
         || !btn_archive_read(archive,member,slot*8192+6144,sizeof(bytes),bytes,sizeof(bytes)))
         return SDL_SetError("Setup prompt requires a bounded text-only message slot");
-    /* These two retail prompts start with NO_SCROLL; the native UI displays
-     * their complete text. Opening/typing timing remains a separate gate. */
+    /* These retail prompts start with NO_SCROLL: RenderDialogTextPage fills
+     * textIndex up to END, so their complete text appears when the box is ready. */
     if (le16(bytes)!=0xFF3) return SDL_SetError("Setup prompt has no NO_SCROLL prefix");
     for (unsigned i=0; i<63; ++i) {
         uint16_t word=(uint16_t)le16(bytes+(i+1)*2);
@@ -262,6 +262,7 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
     btn_audio_init(&t->music); btn_audio_init(&t->effects);
     btn_title_reset(&t->state);
     btn_setup_reset(&t->setup);
+    btn_dialog_reset(&t->dialog);
     reset_actors(t);
     return true;
 }
@@ -316,7 +317,8 @@ static bool animate(BtnTitle *t)
 const BtnNewGame *btn_title_new_game(const BtnTitle *t)
 {
     return t && t->state.page==BTN_TITLE_READY && !t->state.pending
-        && !t->state.fade_level && t->setup.stage==BTN_SETUP_DONE ? &t->setup.game : NULL;
+        && !t->state.fade_level && t->dialog.phase==BTN_DIALOG_HIDDEN
+        && t->setup.stage==BTN_SETUP_DONE ? &t->setup.game : NULL;
 }
 
 bool btn_title_tick(BtnTitle *t, const BtnInput *input)
@@ -325,13 +327,16 @@ bool btn_title_tick(BtnTitle *t, const BtnInput *input)
     (void)random_range(t,65535); /* main_run_frame consumes one random draw. */
     int sound=btn_title_step(&t->state,input);
     if (before==BTN_TITLE_READY && t->state.page==BTN_TITLE_INTRO) {
-        reset_actors(t); btn_setup_reset(&t->setup); btn_audio_init(&t->music); btn_audio_stop(&t->effects);
+        reset_actors(t); btn_setup_reset(&t->setup); btn_dialog_reset(&t->dialog);
+        btn_audio_init(&t->music); btn_audio_stop(&t->effects);
         if (!btn_sequence_open(&t->sequence,t->sequence_data,t->sequence.size,true)) return false;
     }
-    if (before!=BTN_TITLE_SETUP && t->state.page==BTN_TITLE_SETUP) btn_setup_reset(&t->setup);
+    if (before!=BTN_TITLE_SETUP && t->state.page==BTN_TITLE_SETUP) {
+        btn_setup_reset(&t->setup); btn_dialog_reset(&t->dialog);
+    }
     else if (t->state.page==BTN_TITLE_SETUP && !t->state.pending && !t->state.fade_level) {
-        sound=btn_setup_step(&t->setup,&t->name_layout,input);
-        if (t->setup.stage==BTN_SETUP_DONE) {
+        sound=btn_dialog_setup_step(&t->dialog,&t->setup,&t->name_layout,input);
+        if (t->setup.stage==BTN_SETUP_DONE && t->dialog.phase==BTN_DIALOG_HIDDEN) {
             for (unsigned i=0; i<4; ++i) t->setup.game.seeds[i]=(uint16_t)random_range(t,65535);
             if (!btn_audio_volume(&t->music,1,BTN_AUDIO_RATE*10/BTN_TITLE_HZ)) return false;
             transition(&t->state,BTN_TITLE_READY);

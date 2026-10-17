@@ -7,12 +7,15 @@ an overlay address to a host function pointer.
 
 The extension adds logo/copyright/Start entrance motion, fade transitions,
 scrolling scenery, randomized sprite actors and the full new-game setup order.
-The animation/setup and source-based window/text rendering pass all 19
-Windows Debug CTest suites (baseline 77ee140: 22.89 seconds).
-The shared UI icons/confirmation passes the real-data suite (13.66 seconds)
-and synthetic CLI suite (6.01 seconds, exit 0) after a cursor ordering fix and
-fixture correction. The other 17 suites passed the initial full run; they were
-not repeated after the title drawing/fixture correction.
+The current dialog opening/closing and input-gating update passes all 19
+Windows Debug CTest suites (60.02 seconds, CTest exit 0, user-reported).
+The build exit code was not reported separately. Seven additional headless
+captures passed and were visually inspected: opening, closing, name entry,
+name confirmation, calendar, birthday confirmation and completed setup.
+Local evidence: `build/native-validation/phase05-dialog-windows-evidence.json`;
+source/data audit: `phase05-dialog-audit.json`; captures: `phase05-dialog-*.bmp/png`.
+These local artifacts and retail assets are not committed.
+Earlier milestones remain recorded in `docs/phase05-progress.md`.
 A successful setup exposes a typed handoff;
 farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
 window/dialog appearance, trig quantization and audio parity are separate gates.
@@ -145,13 +148,16 @@ B=32, Start=64. A held mask is not another press. For example:
 import struct
 from pathlib import Path
 events = [(0, 0), (10, 64), (11, 0), (32, 64), (33, 0),
-          (34, 1), (35, 0), (36, 16), (37, 0), (58, 16), (59, 0)]
+          (34, 1), (35, 0), (36, 16), (37, 0), (80, 16), (81, 0)]
 Path('build/title.input').write_bytes(b''.join(struct.pack('<II', *event) for event in events))
 ```
 
 For the new entrance/fade sequence, use a replay beginning with `(0,0)`, skip
 with `(10,64)`, release at `(11,0)`, and open the menu at `(32,64)` followed by
-`(33,0)`. The complete generated setup replay is in `tests/check_title_cli.py`.
+`(33,0)`. The complete generated setup replay is `setup_replay()` in
+`tests/check_title_cli.py`; its current final snapshot is tick 426. Early presses
+during opening are deliberately ignored, so earlier setup replay timings no
+longer describe the animated dialog path.
 Matching PS1 captures and input sequences are still required for phase
 acceptance. See [phase05-progress.md](phase05-progress.md).
 
@@ -175,11 +181,29 @@ as the source does. UI icons render above text, panels and the dimmed scene.
 Only text-only message slots with the expected NO_SCROLL prefix are accepted;
 unsupported controls, image-bearing slots and missing END fail visibly.
 
+The dialog controller ports `menu_box_animate` integer geometry: duration
+parameter 12 for opening and 6 for closing, plus six width steps. Including
+the source's zero-height frame skip, these take 18 and 12 simulation calls.
+The initial zero-width frame produces no raster output. Panels animate from
+the centre, close before changing their message, and reveal text/choices only
+when fully open. Confirm, cancel and editing presses during animation are
+discarded. Pad repeat timing continues, and handoff waits for the final close.
+The helpers advance on simulation ticks, so pause and presentation FPS do not
+advance them independently.
+
+The audited setup prompts have NO_SCROLL (`0x0FF3`). In `RenderDialogTextPage`
+this fills textIndex through END; the supported prompts appear together rather
+than using a typewriter effect. No generic scrolling/typing/portrait dialog
+engine is claimed. The native help/review text follows the same box lifecycle.
+
 Help text still describes the native keyboard controls. The handoff review,
-dialog opening/typing and exact PS1 raster/timing remain comparison/implementation
-gates. Reconstructing window
+async resource scheduling and exact PS1 raster/timing remain comparison gates.
+Reconstructing window
 commands from source is not a hardware reference capture. CLI tests independently
 decode both keyboard pages, check their glyph pixels/CLUT, frame edges/gradient,
 and reject unsupported or unterminated executable captions. Added checks cover
 hand/season pixel decoding, both choice rows, confirmation prompts, hidden
 keyboard/calendar, malformed message slots and missing cursor frames.
+Dialog unit tests cover integer geometry, open/close counts, blocked input,
+held-repeat continuity, reset and handoff gating. Replay checks cover partial
+opening/closing frames and complete NO_SCROLL text on the first ready frame.

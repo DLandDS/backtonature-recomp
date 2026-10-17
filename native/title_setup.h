@@ -37,5 +37,7 @@ uint16_t btn_name_character(const BtnNameLayout *layout, unsigned cell, unsigned
  * No file I/O, PS1 pointers, save format or gameplay state is fabricated here. */
 int btn_setup_step(BtnTitleSetup *setup, const BtnNameLayout *layout, const BtnInput *input);
 const uint16_t *btn_setup_name(const BtnTitleSetup *setup);
+/* Pad repeat keeps running while a dialog blocks actions. */
+void btn_setup_observe_input(BtnTitleSetup *setup, const BtnInput *input);
 
 #endif

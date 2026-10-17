@@ -92,6 +92,11 @@ static uint32_t direction_repeat(BtnTitleSetup *s, const BtnInput *input)
     return result & ~directions ? 0 : result;
 }
 
+void btn_setup_observe_input(BtnTitleSetup *s, const BtnInput *input)
+{
+    (void)direction_repeat(s,input);
+}
+
 static void name_accepted(BtnTitleSetup *s)
 {
     s->confirming=false; s->choice=s->value=0;

@@ -92,6 +92,8 @@ and mapped music. Its intro/scenery and new-game setup extension passes the
 Windows Debug suites; playable gameplay and save/load remain separate phases.
 The setup window/text alignment also passes Windows Debug validation.
 Shared UI cursors, season icons and source confirmation prompts pass targeted CLI/data validation.
+The source-based dialog opening/closing and input gating pass all 19 Windows Debug
+CTest suites (60.02 seconds, CTest exit 0). PS1 parity remains unverified.
 [Phase-05 status](docs/phase05-progress.md) records the validation gates.
 
 ### 1. Build the toolchain image

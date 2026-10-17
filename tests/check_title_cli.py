@@ -340,6 +340,17 @@ def check_name_pixels(folder, capture, shifted=False):
     assert pixel(272,79) != pixel(272,147), 'Window fill must retain its vertical gradient'
 
 
+def setup_replay():
+    events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,1),(35,1),(36,0),(37,16),(38,0)]
+    # Early presses during opening must be discarded. Later presses wait for
+    # each source-derived close/open cycle; season->day shares the help dialog.
+    for tick,mask in [(59,16),(61,64),(63,16),(65,2),
+                      (80,16),(82,64),(120,16),(156,16),(162,16),(200,16),
+                      (234,16),(236,64),(274,16),(308,16),(310,64),(348,16),(386,16)]:
+        events += [(tick,mask),(tick+1,0)]
+    return events
+
+
 def check(executable, retail=None):
     with tempfile.TemporaryDirectory(prefix='btn-title-') as temporary:
         root = Path(temporary)
@@ -369,28 +380,34 @@ def check(executable, retail=None):
         assert bmp(capture) == reference(source,menu=True,tick=43)
         # Original setup order: player, birthday, farm, dog, review, then a
         # typed handoff. Gameplay is not replaced by a successful dummy scene.
-        events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,1),(35,1),(36,0),(37,16),(38,0)]
+        events = setup_replay()
         # Both keyboard pages use retail caption streams and palette 3.
         for shifted in (False,True):
-            naming = list(events)
+            naming = [event for event in events if event[0]<80]
             if shifted:
-                for tick,mask in [(59,4),(61,16)]:
+                for tick,mask in [(80,4),(82,16)]:
                     naming += [(tick,mask),(tick+1,0)]
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in naming))
             capture = root/('symbols.bmp' if shifted else 'name.bmp')
-            run(executable,*common,'--frames','66','--input-script',script,'--output',capture)
+            run(executable,*common,'--frames','86','--input-script',script,'--output',capture)
             check_name_pixels(source,capture,shifted)
-        for tick,mask in [(59,16),(61,64),(63,16),(65,16),(67,16),(69,16),
-                          (71,16),(73,64),(75,16),(77,16),(79,64),(81,16),(83,16)]:
-            events += [(tick,mask),(tick+1,0)]
-        for frames in (63,65,67,69):
+        # Opening and closing use the integer source geometry. Full dialog text
+        # is absent while animating; these snapshots are before any choice.
+        for frames,edge_y in ((65,193),(84,170)):
+            script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
+            capture = root/f'box-{frames}.bmp'
+            run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
+            raw = bmp(capture)
+            assert raw[(edge_y*320+100)*3:(edge_y*320+101)*3] == rgb(31 | (29<<5) | (26<<10))
+            assert raw[(164*320+100)*3:(164*320+101)*3] != rgb(31 | (29<<5) | (26<<10))
+        for frames in (112,154,160,192):
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
             capture = root/f'prompt-{frames}.bmp'
             run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
-            if frames in (63,69):
+            if frames in (112,192):
                 offsets = struct.unpack('<33I',(source/'A_FILE.HDT').read_bytes())
                 member, = exe_words(source,0x8005597C+6,1)
-                slot = 0x3A6 if frames==63 else 0x3A7
+                slot = 0x3A6 if frames==112 else 0x3A7
                 with (source/'A_FILE.BIN').open('rb') as stream:
                     stream.seek(offsets[member]+slot*8192+6144)
                     words = struct.unpack('<64H',stream.read(128))
@@ -398,33 +415,38 @@ def check(executable, retail=None):
                 expected = text_pixels(source,words[1:],30,168)
                 expected.update(text_pixels(source,exe_words(source,0x8005175C,16),147,78))
                 expected.update(ui_pixels(source,11,1,153,84))
-                if frames==69:
+                if frames==192:
                     expected.update(ui_pixels(source,43,0,253,35))
                 check_pixels(capture,expected)
                 # The underlying keyboard/calendar is hidden during confirmation.
                 raw = bmp(capture)
-                y = 64 if frames==63 else 56
+                y = 64 if frames==112 else 56
                 assert raw[(y*320+100)*3:(y*320+101)*3] != rgb(31 | (29<<5) | (26<<10))
             else:
                 expected = {}
                 for season in range(4):
                     expected.update(ui_pixels(source,43,season,30+season*64,60))
-                if frames==67:
+                if frames==160:
                     expected.update(ui_pixels(source,43,0,253,35))
-                expected.update(ui_pixels(source,11,1,36,66 if frames==65 else 94))
+                expected.update(ui_pixels(source,11,1,36,66 if frames==154 else 94))
                 check_pixels(capture,expected)
         # Moving to No uses the second choice row without accepting the name.
-        no_events = [event for event in events if event[0]<63]+[(63,2),(64,0)]
+        no_events = [event for event in events if event[0]<116]+[(116,2),(117,0)]
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in no_events))
         capture = root/'name-no.bmp'
-        run(executable,*common,'--frames','65','--input-script',script,'--output',capture)
+        run(executable,*common,'--frames','119','--input-script',script,'--output',capture)
         check_pixels(capture,ui_pixels(source,11,1,153,96))
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in events))
-        output = run(executable,*common,'--frames','106','--input-script',script,'--output',root/'setup.bmp')
+        output = run(executable,*common,'--frames','426','--input-script',script,'--output',root/'setup.bmp')
         for stage in (1,2,3,4,5,6,7):
             assert f'stage={stage} ' in output, output[-1500:]
         assert 'tick=35 page=' not in output, 'Held menu direction must not repeat'
-        assert 'title stopped: ticks=106 page=5 selection=0' in output
+        assert 'title stopped: ticks=426 page=5 selection=0' in output
+        for tick in (59,61,63,65):
+            assert f'title setup: tick={tick} ' not in output, 'Opening input must be discarded'
+        for line in ('tick=75 kind=1 phase=2','tick=82 kind=1 phase=3',
+                     'tick=111 kind=3 phase=2','tick=397 kind=0 phase=0'):
+            assert 'title dialog: '+line in output, line
         assert 'New Game setup ready; gameplay requires phase 06' in output
         assert 'title handoff: names=1/1/1 birthday=0/0 flags=00002000' in output
         # The completed setup screen must contain pixels, not an empty capture.

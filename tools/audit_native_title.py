@@ -108,6 +108,11 @@ def audit(directory):
                                sources=['src/ui/name_entry.c','src/ui/name_entry_2.c'],
                                symbol_table='0x800559D4',row_limits=['0x8005E364','0x8005E36C'],
                                column_limits=['0x8005599C','0x800559AC'])
+    result['setup_dialog'] = dict(box=[26,164,267,62],opening_duration_parameter=12,
+        closing_duration_parameter=6,width_steps=6,opening_calls=18,closing_calls=12,
+        sources=['src/ui/menu_window.c:menu_box_animate','src/text/dialog.c:RenderDialogTextPage'],
+        prompt_mode='NO_SCROLL fills textIndex to END; complete text, not typewriter animation',
+        parity='Source-derived geometry; async I/O, frame scheduling and PS1 raster still need comparison')
     result['inputs'] = [file_identity(directory/name) for name in ('A_FILE.HDT','A_FILE.BIN','SLUS_011.15')]
     result['validation'] = 'Static source/data audit only; native compilation, tests and PS1 parity are separate gates'
     return result

@@ -4,12 +4,47 @@ Diperbarui: 17 Oktober 2026 (Asia/Jakarta). Baseline: `5645d68`.
 
 ## Status
 
-**Berjalan. Intro/fade, animasi, setup dan UI native tervalidasi Windows Debug.
-Lanjutan cursor/ikon/konfirmasi lulus ulang terarah: data asli 13,66 detik,
-CLI sintetis 6,01 detik (exit 0). Sebanyak 17 suite lain lulus pada run awal.
+**Berjalan. Intro/fade, animasi, setup, UI dan animasi dialog native
+tervalidasi Windows Debug: 19/19 lulus, 0 gagal, 60,02 detik, CTest exit 0.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
-tampilan/timing PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.
-Hasil 19/19 dalam 22,89 detik tetap dicatat sebagai baseline `77ee140`.**
+visual/timing/audio PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Lanjutan animasi dialog — menunggu validasi
+
+- Controller memakai geometri bilangan bulat `menu_box_animate`: parameter
+  durasi 12 untuk buka, 6 untuk tutup, enam langkah lebar dan skip frame dengan
+  tinggi nol. Model memerlukan 18 tick buka dan 12 tick tutup; frame awal
+  dengan lebar nol tidak digambar.
+- Dialog lama menutup sebelum pesan baru membuka. Teks/pilihan tampil saat
+  siap; input selama transisi dibuang. Repeat pad terus dihitung, dan handoff
+  menunggu penutupan dialog terakhir. Model maju pada tick simulasi.
+- Audit ulang `RenderDialogTextPage` menunjukkan NO_SCROLL (`0x0FF3`) mengisi
+  textIndex hingga END. Pesan konfirmasi setup asli muncul sekaligus; efek
+  ketik tidak ditambahkan pada pesan ini. Engine dialog umum/portrait/scroll
+  tidak diklaim sudah tersedia.
+- Tes C ditambah untuk geometri, jumlah tick, input/held-repeat saat transisi,
+  reset dan batas handoff. Replay lengkap kini berakhir pada tick 426; capture
+  parsial membuka/menutup dan teks lengkap saat ready ditambahkan.
+
+Hasil terminal pengguna, 17 Oktober 2026: **19/19 lulus, 0 gagal, 60,02 detik,
+CTest exit 0**. Seluruh suite, termasuk CLI sintetis (14,12 detik) dan data
+asli title (30,74 detik), lulus pada run penuh terbaru. Exit code build tidak
+dilaporkan terpisah. Tidak ada perubahan kode C setelah hasil tersebut.
+
+Tujuh capture tambahan berhasil, masing-masing exit 0: buka 65 frame, tutup
+84, nama 86, konfirmasi nama 112, kalender 154, konfirmasi ulang tahun 192 dan
+setup selesai 426. Pemeriksaan visual selesai; log handoff tetap
+`names=1/1/1 birthday=0/0 flags=00002000`. Audit sumber/data juga berhasil,
+exit 0. Capture headless tidak menggantikan uji desktop/controller/dengar.
+
+Bukti lokal: `build/native-validation/phase05-dialog-windows-evidence.json`,
+`phase05-dialog-audit.json`, dan `phase05-dialog-{opening,closing,name,confirm,calendar,birthday,ready}.bmp/png`.
+Asset/capture tidak dikomit. Platform Windows x64 Debug, Visual Studio 18 2026,
+MSVC 19.51.36260.0, SDL 3.2.10.
+
+Timing I/O asinkron, penjadwalan terhadap scene/fade, raster dan urutan input
+fisik terhadap PS1 tetap perlu dibandingkan. Review handoff dan bantuan tombol
+masih merupakan adaptasi native.
 
 ## Lanjutan cursor/ikon dan konfirmasi — tervalidasi dengan ulang terarah
 
@@ -30,8 +65,9 @@ Hasil 19/19 dalam 22,89 detik tetap dicatat sebagai baseline `77ee140`.**
 
 Tes diperluas untuk kedua pilihan, piksel ikon/cursor/prompt, grid tersembunyi,
 slot pesan rusak dan frame cursor yang hilang. Hanya slot teks dengan prefix
-NO_SCROLL dan END berbatas yang didukung. Animasi buka/tutup, efek ketik,
-review native dan perbandingan PS1 tetap merupakan sisa pekerjaan.
+NO_SCROLL dan END berbatas yang didukung. Pada baseline ini animasi kotak,
+review native dan perbandingan PS1 masih tersisa. Audit lanjutan di atas
+menjelaskan mengapa pesan NO_SCROLL tidak memerlukan efek ketik.
 
 Validasi pertama lanjutan ini: **18/19 lulus**, total 26,91 detik, CTest exit 8.
 `native-title-data` gagal pada `prompt-65.bmp`, piksel (34,66). Capture terarah

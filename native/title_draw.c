@@ -110,8 +110,9 @@ static bool name_grid(BtnTitle *t)
     if (!panel(t,45,64,230,86)) return false;
     const BtnTextStyle style={t->text_clut_y,1,2};
     if (!btn_text_draw_styled(t->list,1,t->name_captions[s->shift],128,47,66,&style,NULL)) return false;
-    return icon(t,11,1,cell_x(s->cell),72+(int)(s->cell/14)*14)
-        && panel(t,26,164,267,62) && text(t,30,168,"Arrows: Move cursor")
+    if (!icon(t,11,1,cell_x(s->cell),72+(int)(s->cell/14)*14)) return false;
+    if (!btn_dialog_ready(&t->dialog,BTN_DIALOG_NAME_HELP)) return true;
+    return text(t,30,168,"Arrows: Move cursor")
         && text(t,30,182,"Z: Input   X: Erase / Back")
         && text(t,30,196,"Enter / OK: Confirm name")
         && text(t,30,210,"Mark / alphabet: Switch keys");
@@ -120,7 +121,8 @@ static bool name_grid(BtnTitle *t)
 static bool yes_no(BtnTitle *t, const uint16_t *prompt, unsigned choice)
 {
     /* name_prompt_draw: choice window, text and cursor use distinct OT slots. */
-    return panel(t,26,164,267,62) && panel(t,145,76,40,30)
+    if (!btn_dialog_ready(&t->dialog,btn_dialog_for_setup(&t->setup))) return true;
+    return panel(t,145,76,40,30)
         && draw_words(t,t->yes_no,16,147,78) && draw_words(t,prompt,64,30,168)
         && icon(t,11,1,153,84+(int)choice*12);
 }
@@ -132,8 +134,9 @@ static bool calendar(BtnTitle *t)
     if (!panel(t,171,32,133,18) || !text(t,173,35,"Birthday")) return false;
     if (s->stage!=BTN_SETUP_SEASON && !icon(t,43,s->game.season,253,35)) return false;
     if (s->stage==BTN_SETUP_BIRTHDAY_CONFIRM) return number(t,277,35,s->game.day+1);
-    if (!panel(t,20,56,279,103) || !panel(t,26,164,267,62)
-        || !text(t,30,168,"Arrows: Move cursor") || !text(t,30,182,"Z: Select   X: Back")) return false;
+    if (!panel(t,20,56,279,103)) return false;
+    if (btn_dialog_ready(&t->dialog,BTN_DIALOG_BIRTHDAY_HELP)
+        && (!text(t,30,168,"Arrows: Move cursor") || !text(t,30,182,"Z: Select   X: Back"))) return false;
     for (unsigned i=0; i<4; ++i)
         if (!icon(t,43,i,30+(int)i*64,60) || !text(t,42+(int)i*64,60,seasons[i])) return false;
     for (unsigned i=0; i<30; ++i) if (!number(t,30+(int)(i%7)*39,88+(int)(i/7)*14,i+1)) return false;
@@ -157,14 +160,16 @@ static bool review(BtnTitle *t)
 static bool setup_draw(BtnTitle *t)
 {
     BtnTitleSetup *s=&t->setup;
+    BtnRect box=t->dialog.box;
+    if (t->dialog.visible && !panel(t,box.x,box.y,box.w,box.h)) return false;
     if (s->stage==BTN_SETUP_PLAYER || s->stage==BTN_SETUP_FARM || s->stage==BTN_SETUP_DOG)
         return name_grid(t) && (!s->confirming || yes_no(t,t->setup_prompts[0],s->choice));
     if (s->stage==BTN_SETUP_SEASON || s->stage==BTN_SETUP_DAY || s->stage==BTN_SETUP_BIRTHDAY_CONFIRM)
         return calendar(t) && (s->stage!=BTN_SETUP_BIRTHDAY_CONFIRM || yes_no(t,t->setup_prompts[1],s->choice));
     if (!review(t)) return false;
-    if (s->stage==BTN_SETUP_DONE) return true;
+    if (s->stage==BTN_SETUP_DONE || !btn_dialog_ready(&t->dialog,BTN_DIALOG_REVIEW)) return true;
     /* The typed-handoff review is native UI, outside name_prompt_draw. */
-    return panel(t,28,164,264,52) && text(t,40,170,"Begin this game?")
+    return text(t,40,170,"Begin this game?")
         && text(t,94,192,"Yes") && text(t,182,192,"No")
         && icon(t,11,1,s->choice ? 180 : 92,198);
 }

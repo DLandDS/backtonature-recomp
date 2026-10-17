@@ -34,6 +34,85 @@ static int setup_press(BtnTitleSetup *s, const BtnNameLayout *l, unsigned action
     return btn_setup_step(s,l,&input);
 }
 
+static void dialog_checks(void)
+{
+    BtnTitleDialog d; btn_dialog_reset(&d);
+    btn_dialog_tick(&d,BTN_DIALOG_NONE);
+    CHECK(d.phase==BTN_DIALOG_HIDDEN && !d.visible);
+    for (unsigned tick=0; tick<18; ++tick) {
+        btn_dialog_tick(&d,BTN_DIALOG_NAME_HELP);
+        if (!tick) CHECK(!d.visible && d.phase==BTN_DIALOG_OPENING);
+        if (tick==1) CHECK(d.box.x==137 && d.box.y==195 && d.box.w==44 && d.box.h==4);
+        if (tick==5) CHECK(d.box.x==48 && d.box.w==222 && d.box.h==4);
+        if (tick==6) CHECK(d.box.x==26 && d.box.y==193 && d.box.w==267 && d.box.h==4 && d.frame==8);
+        if (tick<17) CHECK(!btn_dialog_ready(&d,BTN_DIALOG_NAME_HELP));
+    }
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_NAME_HELP));
+    CHECK(d.box.x==26 && d.box.y==164 && d.box.w==267 && d.box.h==62);
+    btn_dialog_tick(&d,BTN_DIALOG_NAME_CONFIRM);
+    CHECK(d.phase==BTN_DIALOG_CLOSING && d.box.y==165 && d.box.h==60);
+    for (unsigned i=1; i<12; ++i) btn_dialog_tick(&d,BTN_DIALOG_NAME_CONFIRM);
+    CHECK(d.phase==BTN_DIALOG_HIDDEN && !d.visible);
+    for (unsigned i=0; i<18; ++i) btn_dialog_tick(&d,BTN_DIALOG_NAME_CONFIRM);
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_NAME_CONFIRM));
+
+    BtnNameLayout l=layout(); BtnTitleSetup s; btn_setup_reset(&s); btn_dialog_reset(&d);
+    BtnInput a={0}; a.pressed=a.held=BTN_BIT(BTN_A);
+    for (unsigned i=0; i<18; ++i)
+        CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==-1 && !s.length && !s.confirming);
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_NAME_HELP));
+    BtnInput held=a; held.pressed=0;
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&held)==-1 && !s.length);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==0 && s.length==1);
+    BtnInput start={0}; start.pressed=start.held=BTN_BIT(BTN_START);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&start)==0 && s.confirming && d.phase==BTN_DIALOG_CLOSING);
+    for (unsigned i=0; i<29; ++i)
+        CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==-1 && s.confirming && s.stage==BTN_SETUP_PLAYER);
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_NAME_CONFIRM));
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&held)==-1 && s.confirming);
+    BtnInput down={0}; down.pressed=down.held=BTN_BIT(BTN_DOWN);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&down)==5 && s.choice==1);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==1 && !s.confirming && s.length==1);
+    BtnInput none={0};
+    for (unsigned i=0; i<29; ++i) (void)btn_dialog_setup_step(&d,&s,&l,&none);
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_NAME_HELP));
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&start)==0 && s.confirming);
+    for (unsigned i=0; i<29; ++i) (void)btn_dialog_setup_step(&d,&s,&l,&none);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==0 && s.stage==BTN_SETUP_SEASON);
+    for (unsigned i=0; i<29; ++i) (void)btn_dialog_setup_step(&d,&s,&l,&none);
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_BIRTHDAY_HELP));
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==0 && s.stage==BTN_SETUP_DAY && d.phase==BTN_DIALOG_READY);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==0 && s.stage==BTN_SETUP_BIRTHDAY_CONFIRM);
+    for (unsigned i=0; i<29; ++i) (void)btn_dialog_setup_step(&d,&s,&l,&none);
+    CHECK(btn_dialog_ready(&d,BTN_DIALOG_BIRTHDAY_CONFIRM));
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==0 && s.stage==BTN_SETUP_FARM);
+
+    btn_setup_reset(&s); s.stage=BTN_SETUP_REVIEW; btn_dialog_reset(&d);
+    for (unsigned i=0; i<18; ++i) (void)btn_dialog_setup_step(&d,&s,&l,&none);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&a)==0 && s.stage==BTN_SETUP_DONE && d.phase==BTN_DIALOG_CLOSING);
+    for (unsigned i=0; i<10; ++i) {
+        (void)btn_dialog_setup_step(&d,&s,&l,&none);
+        CHECK(d.phase==BTN_DIALOG_CLOSING);
+    }
+    (void)btn_dialog_setup_step(&d,&s,&l,&none);
+    CHECK(d.phase==BTN_DIALOG_HIDDEN);
+    BtnTitle title={0}; title.setup=s; title.state.page=BTN_TITLE_READY; title.dialog=d;
+    CHECK(btn_title_new_game(&title));
+    title.dialog.phase=BTN_DIALOG_CLOSING; CHECK(!btn_title_new_game(&title));
+    btn_dialog_reset(&title.dialog); CHECK(!title.dialog.visible && !title.dialog.frame);
+
+    btn_setup_reset(&s); btn_dialog_reset(&d);
+    BtnInput right={0}; right.held=BTN_BIT(BTN_RIGHT);
+    for (unsigned i=0; i<18; ++i) {
+        right.pressed=i ? 0 : right.held;
+        CHECK(btn_dialog_setup_step(&d,&s,&l,&right)==-1 && !s.cell);
+    }
+    right.pressed=0;
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&right)==-1 && !s.cell);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&right)==-1 && !s.cell);
+    CHECK(btn_dialog_setup_step(&d,&s,&l,&right)==5 && s.cell==1);
+}
+
 static void enter_one_name(BtnTitleSetup *s, const BtnNameLayout *l)
 {
     CHECK(setup_press(s,l,BTN_A)==0);
@@ -139,7 +218,7 @@ int main(void)
     advance(&state,500); CHECK(state.intro_stage>=3 && state.logo_y==0 && state.copyright_y==0);
     advance(&state,1300); CHECK(state.pending && state.target==BTN_TITLE_ATTRACT);
     advance(&state,21); CHECK(state.page==BTN_TITLE_ATTRACT);
-    setup_checks();
+    setup_checks(); dialog_checks();
 
     /* Presentation rate must not change menu simulation; pause discards elapsed time. */
     const unsigned rates[]={30,60,144};

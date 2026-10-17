@@ -5,6 +5,7 @@
 #include "audio.h"
 #include "image_bank.h"
 #include "title_setup.h"
+#include "title_dialog.h"
 
 #define BTN_TITLE_HZ 30u /* main_run_frame uses VSync(2); nominal NTSC rate. */
 typedef enum {
@@ -36,6 +37,7 @@ typedef struct {
     uint16_t yes_no[16], setup_prompts[2][64];
     unsigned text_clut_y;
     BtnTitleSetup setup;
+    BtnTitleDialog dialog;
     BtnAnimationCursor actors[6], actor_frames[14];
     unsigned actor_ticks[6], background[2], background_frame[2];
     uint32_t random;
