@@ -36,14 +36,18 @@ target_link_libraries(btn_audio PUBLIC btn_runtime SDL3::SDL3-static)
 add_executable(btn-audio audio_main.c)
 target_link_libraries(btn-audio PRIVATE btn_audio)
 
-set(BTN_TARGETS btn_runtime btn-native btn_archive btn-archive btn_graphics btn-graphics btn_audio btn-audio)
+add_library(btn_title STATIC title.c)
+target_link_libraries(btn_title PUBLIC btn_graphics btn_audio)
+target_link_libraries(btn-native PRIVATE btn_title)
+
+set(BTN_TARGETS btn_runtime btn-native btn_archive btn-archive btn_graphics btn-graphics btn_audio btn-audio btn_title)
 if(BUILD_TESTING)
     add_executable(btn-runtime-test ../tests/test_native_runtime.c)
     target_link_libraries(btn-runtime-test PRIVATE btn_runtime)
     list(APPEND BTN_TARGETS btn-runtime-test)
     add_test(NAME native-core COMMAND btn-runtime-test)
     add_executable(btn-input-test ../tests/test_native_input.c)
-    target_link_libraries(btn-input-test PRIVATE btn_runtime SDL3::SDL3-static)
+    target_link_libraries(btn-input-test PRIVATE btn_title)
     list(APPEND BTN_TARGETS btn-input-test)
     add_test(NAME native-input COMMAND btn-input-test "${CMAKE_CURRENT_BINARY_DIR}/test-saves")
     set_tests_properties(native-input PROPERTIES
@@ -77,6 +81,14 @@ if(BUILD_TESTING)
         "${PROJECT_SOURCE_DIR}/tests/check_audio_cli.py" "$<TARGET_FILE:btn-audio>")
     add_test(NAME native-audio-tools COMMAND "${Python3_EXECUTABLE}" -m unittest discover
         -s "${PROJECT_SOURCE_DIR}/tests" -p test_prepare_native_audio.py -q)
+    add_executable(btn-title-test ../tests/test_native_title.c)
+    target_link_libraries(btn-title-test PRIVATE btn_title)
+    list(APPEND BTN_TARGETS btn-title-test)
+    add_test(NAME native-title COMMAND btn-title-test)
+    add_test(NAME native-title-cli COMMAND "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/check_title_cli.py" "$<TARGET_FILE:btn-native>")
+    add_test(NAME native-title-tools COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+        -s "${PROJECT_SOURCE_DIR}/tests" -p test_audit_native_title.py -q)
     set(BTN_NATIVE_DATA_DIR "" CACHE PATH "Optional local HDT/BIN directory for independent member-read testing")
     if(BTN_NATIVE_DATA_DIR)
         if(NOT EXISTS "${BTN_NATIVE_DATA_DIR}/A_FILE.HDT" OR NOT EXISTS "${BTN_NATIVE_DATA_DIR}/A_FILE.BIN")
@@ -88,6 +100,8 @@ if(BUILD_TESTING)
             "${PROJECT_SOURCE_DIR}/tests/check_graphics_cli.py" "$<TARGET_FILE:btn-graphics>" "${BTN_NATIVE_DATA_DIR}")
         add_test(NAME native-audio-data COMMAND "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/check_audio_cli.py" "$<TARGET_FILE:btn-audio>" "${BTN_NATIVE_DATA_DIR}")
+        add_test(NAME native-title-data COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/check_title_cli.py" "$<TARGET_FILE:btn-native>" "${BTN_NATIVE_DATA_DIR}")
     endif()
 endif()
 

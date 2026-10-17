@@ -36,8 +36,13 @@ void btn_input_end_tick(BtnInput *input)
 
 unsigned btn_clock_advance(BtnClock *clock, uint64_t delta_ns, bool active)
 {
+    return btn_clock_advance_hz(clock,delta_ns,active,BTN_TEST_HZ);
+}
+
+unsigned btn_clock_advance_hz(BtnClock *clock, uint64_t delta_ns, bool active, unsigned hz)
+{
     const uint64_t maximum = UINT64_C(250000000);
-    if (!active) {
+    if (!active || !hz || hz>1000) {
         clock->phase = 0;
         return 0;
     }
@@ -46,7 +51,7 @@ unsigned btn_clock_advance(BtnClock *clock, uint64_t delta_ns, bool active)
         clock->dropped_ns += delta_ns - maximum;
         delta_ns = maximum;
     }
-    clock->phase += delta_ns * BTN_TEST_HZ;
+    clock->phase += delta_ns * hz;
     unsigned ticks = (unsigned)(clock->phase / UINT64_C(1000000000));
     clock->phase %= UINT64_C(1000000000);
     return ticks;

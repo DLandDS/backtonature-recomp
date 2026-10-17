@@ -58,6 +58,9 @@ bool btn_audio_sample_play(BtnAudio *audio, const BtnAudioBank *bank,
     unsigned sample, bool loop);
 bool btn_audio_note_on(BtnAudio *audio, const BtnAudioBank *bank,
     unsigned channel, unsigned note, unsigned velocity);
+/* UI sound definitions select one tone explicitly, unlike a sequence note. */
+bool btn_audio_tone_on(BtnAudio *audio, const BtnAudioBank *bank,
+    unsigned program, unsigned tone, unsigned note, unsigned fine, unsigned velocity);
 void btn_audio_note_off(BtnAudio *audio, unsigned channel, unsigned note);
 void btn_audio_stop(BtnAudio *audio);
 bool btn_audio_volume(BtnAudio *audio, float gain, uint32_t fade_frames);

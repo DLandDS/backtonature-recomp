@@ -58,6 +58,18 @@ static void mixer(void)
     CHECK(pcm[100]>0&&pcm[101]==0); btn_audio_note_off(&a,0,60);
     CHECK(btn_audio_render(&a,pcm,64)); CHECK(!a.voices[0].active);
     CHECK(!btn_audio_volume(&a,-1,0)); CHECK(!btn_audio_volume(&a,2,0));
+    btn_audio_init(&a);
+    CHECK(!btn_audio_tone_on(&a,&bank,0,1,60,0,127));
+    CHECK(!btn_audio_tone_on(&a,&bank,0,0,60,128,127));
+    CHECK(btn_audio_tone_on(&a,&bank,0,0,60,64,127));
+    CHECK(a.peak_voices==1&&a.voices[0].active&&a.voices[0].pitch>4096.0);
+    CHECK(btn_audio_render(&a,pcm,64));
+    bytes[32]=2; word(bytes+20,2);
+    memcpy(bytes+0x840,bytes+0x820,32); bytes[0x844]=48;
+    CHECK(btn_audio_bank_open(&bank,bytes,sizeof(bytes)));
+    btn_audio_init(&a);
+    CHECK(btn_audio_tone_on(&a,&bank,0,1,60,0,127));
+    CHECK(a.peak_voices==1&&a.voices[0].pitch==8192.0&&!a.voices[1].active);
 }
 static void sequence(void)
 {

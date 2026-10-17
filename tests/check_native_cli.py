@@ -24,7 +24,7 @@ def main():
             checks += 1
 
         run(["--help"], 0, "Usage:")
-        run([], 2, "not implemented")
+        run([], 2, "Select --runtime-test")
         for arguments in (["--fps", "0"], ["--fps", "nan"], ["--volume", "101"],
                           ["--frames", "-1"], ["--frames", "999999999999999999999"],
                           ["--bind", "up=invalid-scancode"], ["--bind", "up=Escape"],
@@ -39,7 +39,7 @@ def main():
         run(common + ["--data-dir", str(assets)], 1, "Required data file missing or empty")
         (assets / "A_FILE.HDT").write_bytes(b"synthetic header")
         (assets / "A_FILE.BIN").write_bytes(b"synthetic member")
-        run(common + ["--data-dir", str(assets)], 0, "archive contents are not validated")
+        run(common + ["--data-dir", str(assets)], 0, "selected resources are validated")
         for fps in (30, 60, 144):
             run(common + ["--fps", str(fps), "--volume", "25", "--bind", "up=W"],
                 0, "Runtime stopped: frames=3")

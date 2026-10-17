@@ -38,6 +38,8 @@ void btn_input_set(BtnInput *input, unsigned source, uint32_t mask);
 void btn_input_clear(BtnInput *input);
 void btn_input_end_tick(BtnInput *input);
 unsigned btn_clock_advance(BtnClock *clock, uint64_t delta_ns, bool active);
+/* Constant rate per clock, 1..1000 Hz. A rate change requires clearing phase. */
+unsigned btn_clock_advance_hz(BtnClock *clock, uint64_t delta_ns, bool active, unsigned hz);
 void btn_simulate(BtnSimulation *state, const BtnInput *input);
 
 #endif

@@ -111,6 +111,35 @@ bool btn_audio_sample_play(BtnAudio *a,const BtnAudioBank *b,unsigned sample,boo
     v->step=4096; v->pitch=4096; v->level=32767; v->left=v->right=1;
     v->repeating=loop; v->raw=true; return true;
 }
+static void tone_on(BtnAudio *a,const BtnAudioBank *b,const uint8_t *prog,const uint8_t *tone,
+    unsigned channel,unsigned note,unsigned fine,unsigned velocity)
+{
+    BtnAudioVoice *v=allocate_voice(a,tone[0]);
+    if (!v) return; /* A higher-priority voice legitimately wins. */
+    unsigned sample=le16(tone+22);
+    v->data=b->data+b->sample_offset[sample]; v->size=b->sample_size[sample];
+    v->channel=channel; v->note=note; v->repeating=true;
+    v->adsr1=(uint16_t)le16(tone+16); v->adsr2=(uint16_t)le16(tone+18);
+    v->pitch=4096.0*SDL_pow(2.0,((double)note-tone[4]+((double)fine-tone[5])/128.0)/12.0);
+    float volume=(float)velocity/127*(float)b->data[24]/127*(float)prog[1]/127*(float)tone[2]/127;
+    int pan=(int)tone[3]+prog[4]+b->data[25]-128;
+    if (pan<0) pan=0;
+    if (pan>127) pan=127;
+    v->left=volume*(pan>64?(float)(127-pan)/63:1);
+    v->right=volume*(pan<64?(float)pan/64:1);
+}
+
+bool btn_audio_tone_on(BtnAudio *a,const BtnAudioBank *b,unsigned program,unsigned tone,
+    unsigned note,unsigned fine,unsigned velocity)
+{
+    if (!a || !b || !b->data || program>127 || note>127 || fine>127 || velocity>127
+        || b->tone_slot[program]<0 || tone>=b->data[32+program*16])
+        return SDL_SetError("Invalid explicit VAB tone parameters");
+    if (velocity) tone_on(a,b,b->data+32+program*16,
+        b->data+0x820+(size_t)b->tone_slot[program]*512+tone*32,0,note,fine,velocity);
+    return true;
+}
+
 bool btn_audio_note_on(BtnAudio *a,const BtnAudioBank *b,unsigned channel,unsigned note,unsigned velocity)
 {
     if (!a||!b||channel>15||note>127||velocity>127) return SDL_SetError("Invalid note parameters");
@@ -121,19 +150,7 @@ bool btn_audio_note_on(BtnAudio *a,const BtnAudioBank *b,unsigned channel,unsign
     for (unsigned t=0;t<prog[0];++t) {
         const uint8_t *tone=b->data+0x820+(size_t)b->tone_slot[p]*512+t*32;
         if (note<tone[6]||note>tone[7]) continue;
-        BtnAudioVoice *v=allocate_voice(a,tone[0]);
-        if (!v) continue; /* A higher-priority voice legitimately wins. */
-        unsigned sample=le16(tone+22);
-        v->data=b->data+b->sample_offset[sample]; v->size=b->sample_size[sample];
-        v->channel=channel; v->note=note; v->repeating=true;
-        v->adsr1=(uint16_t)le16(tone+16); v->adsr2=(uint16_t)le16(tone+18);
-        v->pitch=4096.0*SDL_pow(2.0,((double)note-tone[4]-(double)tone[5]/128.0)/12.0);
-        float volume=(float)velocity/127*(float)b->data[24]/127*(float)prog[1]/127*(float)tone[2]/127;
-        int pan=(int)tone[3]+prog[4]+b->data[25]-128;
-        if (pan<0) pan=0;
-        if (pan>127) pan=127;
-        v->left=volume*(pan>64?(float)(127-pan)/63:1);
-        v->right=volume*(pan<64?(float)pan/64:1);
+        tone_on(a,b,prog,tone,channel,note,0,velocity);
     }
     return true;
 }

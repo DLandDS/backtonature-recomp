@@ -87,6 +87,10 @@ For the separate synthetic SDL3 runtime (no game data or PSY-Q required), see
 The [native graphics viewer](docs/native-graphics.md) decodes selected local
 resources and provides a software-renderer/GTE test scene. Phase-03 evidence
 and remaining validation gates are in [the progress record](docs/phase03-progress.md).
+The [partial native title preview](docs/native-title.md) adds the original
+Start/menu sprites and mapped music. Intro/scenery, new-game setup and playable
+gameplay remain incomplete; [phase-05 status](docs/phase05-progress.md) records
+the validation gates.
 
 ### 1. Build the toolchain image
 
