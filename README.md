@@ -84,6 +84,9 @@ their offset names; an unknown meaning is not guessed.
 
 For the separate synthetic SDL3 runtime (no game data or PSY-Q required), see
 [Native SDL3 runtime](docs/native-runtime.md). It is not a playable game port.
+The [native graphics viewer](docs/native-graphics.md) decodes selected local
+resources and provides a software-renderer/GTE test scene. Phase-03 evidence
+and remaining validation gates are in [the progress record](docs/phase03-progress.md).
 
 ### 1. Build the toolchain image
 

@@ -76,6 +76,8 @@ specified, both `A_FILE.HDT` and `A_FILE.BIN` must be nonempty regular files.
 This checks paths only; archive validation belongs to the resource reader.
 The separate [archive CLI](native-archive.md) validates HDT/BIN spans and dumps
 member ranges without starting the runtime window.
+The [graphics viewer](native-graphics.md) decodes selected image/animation banks
+and presents a separate software-renderer/GTE reference scene.
 Never overwrite those files. The save directory defaults to SDL's per-user
 preference directory. It is created, but no game save is written. Volume is
 validated and logged; audio playback is unavailable and no audio device opens.

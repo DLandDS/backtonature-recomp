@@ -26,7 +26,12 @@ target_link_libraries(btn_archive PUBLIC btn_runtime SDL3::SDL3-static)
 add_executable(btn-archive archive_main.c)
 target_link_libraries(btn-archive PRIVATE btn_archive)
 
-set(BTN_TARGETS btn_runtime btn-native btn_archive btn-archive)
+add_library(btn_graphics STATIC graphics.c image_bank.c gte.c animation.c graphics_scene.c)
+target_link_libraries(btn_graphics PUBLIC btn_archive)
+add_executable(btn-graphics graphics_main.c)
+target_link_libraries(btn-graphics PRIVATE btn_graphics)
+
+set(BTN_TARGETS btn_runtime btn-native btn_archive btn-archive btn_graphics btn-graphics)
 if(BUILD_TESTING)
     add_executable(btn-runtime-test ../tests/test_native_runtime.c)
     target_link_libraries(btn-runtime-test PRIVATE btn_runtime)
@@ -53,6 +58,12 @@ if(BUILD_TESTING)
     add_test(NAME native-archive-load COMMAND btn-archive-load-test)
     add_test(NAME native-data-tools COMMAND "${Python3_EXECUTABLE}" -m unittest discover
         -s "${PROJECT_SOURCE_DIR}/tests" -p test_prepare_native_data.py -q)
+    add_executable(btn-graphics-test ../tests/test_native_graphics.c)
+    target_link_libraries(btn-graphics-test PRIVATE btn_graphics)
+    list(APPEND BTN_TARGETS btn-graphics-test)
+    add_test(NAME native-graphics COMMAND btn-graphics-test)
+    add_test(NAME native-graphics-cli COMMAND "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/check_graphics_cli.py" "$<TARGET_FILE:btn-graphics>")
     set(BTN_NATIVE_DATA_DIR "" CACHE PATH "Optional local HDT/BIN directory for independent member-read testing")
     if(BTN_NATIVE_DATA_DIR)
         if(NOT EXISTS "${BTN_NATIVE_DATA_DIR}/A_FILE.HDT" OR NOT EXISTS "${BTN_NATIVE_DATA_DIR}/A_FILE.BIN")
@@ -60,6 +71,8 @@ if(BUILD_TESTING)
         endif()
         add_test(NAME native-archive-data COMMAND "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/check_archive_cli.py" "$<TARGET_FILE:btn-archive>" "${BTN_NATIVE_DATA_DIR}")
+        add_test(NAME native-graphics-data COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/check_graphics_cli.py" "$<TARGET_FILE:btn-graphics>" "${BTN_NATIVE_DATA_DIR}")
     endif()
 endif()
 
