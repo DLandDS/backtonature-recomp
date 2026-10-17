@@ -82,19 +82,16 @@ their offset names; an unknown meaning is not guessed.
 
 ## Building
 
-For the separate synthetic SDL3 runtime (no game data or PSY-Q required), see
-[Native SDL3 runtime](docs/native-runtime.md). It is not a playable game port.
-The [native graphics viewer](docs/native-graphics.md) decodes selected local
-resources and provides a software-renderer/GTE test scene. Phase-03 evidence
-and remaining validation gates are in [the progress record](docs/phase03-progress.md).
-The [native title preview](docs/native-title.md) includes original title assets
-and mapped music. Its intro/scenery and new-game setup extension passes the
-Windows Debug suites; playable gameplay and save/load remain separate phases.
-The setup window/text alignment also passes Windows Debug validation.
-Shared UI cursors, season icons and source confirmation prompts pass targeted CLI/data validation.
-The source-based dialog opening/closing and input gating pass all 19 Windows Debug
-CTest suites (60.02 seconds, CTest exit 0). PS1 parity remains unverified.
-[Phase-05 status](docs/phase05-progress.md) records the validation gates.
+Native build instructions, runtime and viewer usage, phase progress, validation
+evidence, and known limitations are maintained in
+[Notes: Progress and guides](https://notes.dlands.me/doc/progres-native-port-semua-fase-FMuvm98uBP).
+The [project plan and checklist](https://notes.dlands.me/doc/rencana-native-port-harvest-moon-back-to-nature-AIFdhztqgl)
+are also maintained in Notes. Both documents provide clickable contents by phase.
+
+The SDL3 tools include a synthetic runtime, graphics/audio previews, and a
+title/new-game setup preview. Playable gameplay and save/load are not available;
+PS1 parity remains unverified. Test results apply to the revisions and scopes
+recorded in Notes.
 
 ### 1. Build the toolchain image
 

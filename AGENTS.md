@@ -14,4 +14,8 @@ All additional skills are available under `.agents/skills/`; read and use the ap
 
 Use the existing checkout. Each cloud task already has an isolated environment; do not create a Git worktree unless explicitly requested.
 
+Preserve the original source folder structure and file locations. Prefer running the original game logic through replacement PS1 SDK services, with the smallest necessary source changes; keep host/SDL implementations separate. Plan mod support after the original game runs fully and its behavior is validated.
+
+Maintain native-port plans, checklists, phase progress, and phase-specific usage/reference documentation only in Notes through Dlands Connect. Update the existing [plan](https://notes.dlands.me/doc/rencana-native-port-harvest-moon-back-to-nature-AIFdhztqgl) and [combined progress and guides](https://notes.dlands.me/doc/progres-native-port-semua-fase-FMuvm98uBP), using phase headings and clickable contents. Check off only work supported by evidence and describe partial or unverified work. Do not create or restore per-phase Markdown documents in the repository; README may link to Notes. Keep code, tests, and generated local validation evidence in their existing locations.
+
 Upstream packages, scripts, hooks, licenses, and platform adapters are retained in `vendor/skills/`. Their runtime-specific hooks are available but not registered automatically. Treat upstream copies as pinned third-party sources; do not edit them for ordinary application work. See `docs/vibe-coding.md` and `skills-lock.json` for setup and provenance.
