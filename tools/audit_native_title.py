@@ -177,6 +177,15 @@ def audit(directory):
         prompt_mode='NO_SCROLL fills textIndex to END; complete text, not typewriter animation',
         parity='Source-derived geometry; async I/O, frame scheduling and PS1 raster still need comparison')
     result['inputs'] = [file_identity(directory/name) for name in ('A_FILE.HDT','A_FILE.BIN','SLUS_011.15')]
+    angles=exe.read(0x80058264,24); steps=struct.unpack('<6I',angles)
+    if not all(0<step<=1024 and (not i or step<steps[i-1]) for i,step in enumerate(steps)):
+        raise ValueError('Title CORDIC requires six decreasing positive angle steps')
+    result['scenery_wave']=dict(draw_function='0x800B944C',cosine='0x80036CB4',sine='0x80036F44',
+        cordic='0x80036D84',angle_table='0x80058264',table_bytes=24,
+        table_sha256=hashlib.sha256(angles).hexdigest(),rotations=6,initial_x=2487,
+        angle='floor(background_frame[1] * 4096 / 120)',quadrant_fold='2047/4095 minus angle',
+        output='six rotations plus residual correction; multiply by 12 and truncate /4096',
+        parity='Integer SDK reconstruction; framebuffer timing and PS1 raster remain separate gates')
     result['validation'] = 'Static source/data audit only; native compilation, tests and PS1 parity are separate gates'
     return result
 

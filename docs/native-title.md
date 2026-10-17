@@ -18,12 +18,14 @@ These local artifacts and retail assets are not committed.
 Earlier milestones remain recorded in `docs/phase05-progress.md`.
 A successful setup exposes a typed handoff;
 farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
-window/dialog appearance, trig quantization and audio parity are separate gates.
+window/dialog appearance, timing and audio parity are separate gates.
 The mayor dialog/portrait/reveal update passes the four title suites before a
 wait-icon correction; the corrected build passes targeted synthetic/real-data
 portrait/text/wait-indicator checks (build exit 0). Details are recorded below.
 The subsequent birthday-header/final-review update passes all four title suites
 (256.64 seconds, CTest exit 0) and three additional real-data capture checks.
+The integer scenery-wave correction passes four title suites (277.58 seconds,
+CTest exit 0) and two full-frame capture checks.
 The follow-up original setup question panels pass all four title suites
 (60.15 seconds, CTest exit 0). The other 15 suites were not repeated for this change.
 Video observations and the source/data mapping are recorded in
@@ -330,3 +332,47 @@ Retail assets and captures stay local.
 Native keyboard help, the explicit unavailable-gameplay handoff screen and
 controlled PS1 timing/audio comparison remain separate; this update does not
 claim playable gameplay or full phase acceptance.
+
+## Integer scenery wave (Windows Debug validated)
+
+The previous renderer used fractional angles and host sine/cosine. The original
+overlay `0x800B944C` truncates `background_frame[1] * 4096 / 120` to an integer
+before calling SDK `ccos` (`0x80036CB4`) / `csin` (`0x80036F44`). Their shared
+`csincos` (`0x80036D84`) performs six CORDIC rotations from `(2487,0)`, then a
+residual-angle correction. Quadrants fold around 2047/4095, rather than ideal
+floating-point quarter turns. The final displacement truncates `value*12/4096`
+toward zero.
+
+The native port uses host C only, with explicit arithmetic shifts. Six angle
+steps are read as bounded 32-bit words from executable `0x80058264`; values
+must be positive, decreasing and at most 1024. No SDK code bytes are executed
+by the native runtime. Scene timing, audio and input handling are unchanged.
+
+A local bounded diagnostic compared the reconstructed model to the original
+SDK routines for all 4096 nonnegative angles, both sine and cosine, using both
+retail and artificial angle tables. Every output matched. On a 120-step motion
+cycle, the old host path differs at 40 of the 240 layer-displacement samples.
+This proves the arithmetic difference, not PS1 framebuffer/timing parity.
+
+Unit coverage checks the complete cycle against checksum `313219461`, obtained
+independently from SDK execution with synthetic steps `(512,300,160,80,40,20)`.
+The CLI oracle reads the selected input's table, checks a full frame at tick 12,
+and rejects zero, oversized or non-decreasing steps. Its new frame comparison
+rejects the old native renderer. Python syntax, fixture and source/data audit
+passed. The user reports four title suites passing: native-title 0.03 seconds,
+native-title-cli 105.92, native-title-tools 0.20, native-title-data 171.42;
+total 277.58 seconds, CTest exit 0. The build exit code was not reported
+separately; the supplied script only runs CTest after a successful build.
+The other 15 suites were not repeated.
+
+Two additional tick-12 captures passed (exit 0), one synthetic and one real-data.
+Their complete framebuffers match the independent SDK-wave oracle; the new
+synthetic frame also differs from the retained old host-trig frame. The real-data
+capture was inspected visually. C/test source hashes match the pending evidence;
+only documentation was updated after the test report.
+
+Local diagnostics remain under ignored `build/native-validation/`:
+`phase05-wave-source-proof.json`, `phase05-wave-audit.json`,
+`phase05-wave-old.bmp`, `phase05-wave-{synthetic,retail}.bmp/png` and
+`phase05-wave-windows-evidence.json`. Controlled PS1
+input/timing/audio and hardware raster comparisons remain open.

@@ -11,8 +11,40 @@ Dialog wali kota lulus empat suite title (227,58 detik, CTest exit 0);
 koreksi indikator berikutnya lulus rebuild (exit 0) dan dua capture terarah.
 Header ulang tahun/review akhir lulus empat suite title (256,64 detik,
 CTest exit 0) dan tiga capture data asli tambahan.
+Gerak latar integer SDK lulus empat suite title (277,58 detik, CTest exit 0)
+dan dua capture seluruh framebuffer.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
 visual/timing/audio PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Gerak latar integer SDK — tervalidasi Windows Debug
+
+Lanjutan setelah `a5f60f2` mengganti sinus/cosinus host dengan port C jalur
+integer SDK: sudut `frame*4096/120` dibulatkan ke bawah, enam rotasi CORDIC,
+koreksi sudut sisa dan lipatan kuadran asli. Enam konstanta sudut dibaca dari
+executable `0x80058264`; nol, lebih dari 1024 atau urutan tidak menurun ditolak.
+Fungsi asli: `ccos` `0x80036CB4`, `csin` `0x80036F44`, `csincos` `0x80036D84`;
+pemanggil overlay `0x800B944C`. Runtime tetap hanya menjalankan C host.
+
+Diagnostik lokal berbatas mencocokkan model dengan kedua fungsi SDK untuk
+seluruh 4096 sudut, memakai tabel asli dan sintetis: semua cocok. Perbandingan
+120 langkah menemukan 40 dari 240 sampel pergeseran berbeda pada jalur host
+lama. Ini bukti aritmetika, bukan pengukuran raster atau timing PS1.
+
+Tes unit menambahkan checksum satu siklus penuh dari eksekusi SDK dengan tabel
+sintetis; CLI menambahkan frame 12 dan penolakan tabel rusak. Oracle baru
+berhasil menolak framebuffer native lama. Syntax Python, fixture dan audit
+data lulus. Hasil pengguna: **4/4 title lulus, 0 gagal, 277,58 detik,
+CTest exit 0**. Unit 0,03 detik, CLI 105,92, tools 0,20 dan data asli 171,42.
+Exit code build tidak dilaporkan terpisah; skrip hanya menjalankan CTest setelah
+build berhasil. Lima belas suite lain tidak diulang.
+
+Dua capture tambahan pada tick 12 berhasil (exit 0): sintetis dan data asli.
+Seluruh framebuffer cocok dengan oracle SDK; capture sintetis baru juga berbeda
+dari hasil host-trig lama. Capture data asli diperiksa visual. Hash source C/tes
+tetap sama dengan bukti sebelum build; hanya dokumentasi diperbarui setelah tes.
+Bukti lokal: `build/native-validation/phase05-wave-{source-proof,audit,windows-evidence}.json`
+dan `phase05-wave-{synthetic,retail}.bmp/png`. Asset/capture tetap lokal.
+Clock, input dan audio tidak diubah. Validasi PS1 terkontrol masih terbuka.
 
 ## Header ulang tahun dan review akhir — tervalidasi Windows Debug
 
@@ -278,7 +310,7 @@ sebagai fungsi host.
 | 5.2 | Lulus untuk jalur native teruji | Startup SDL, state host, loader berbatas, tanpa CRT0/BIOS; suite sintetis dan data lokal lulus. | Integrasi global gameplay fase 06. |
 | 5.3 | Lulus sampai handoff setup | `btn_title_tick`/`btn_title_draw` menjalankan C host; `btn_title_new_game()` menyediakan data setelah fade selesai. | Konsumen gameplay fase 06 dan save/load fase 07. |
 | 5.4 | Lulus untuk reset teruji | Resource terpisah dari state; reset intro/aktor/setup dan replay lulus tanpa pointer handler PS1. | Perpindahan scene gameplay/save-load. |
-| 5.5 | Sebagian | Renderer, audio, input, fade dan animasi memakai tick nominal 30 Hz; tes 30/60/144 FPS lulus. | Timing NTSC fraksional, kuantisasi trig dan acuan PS1. |
+| 5.5 | Sebagian | Renderer, audio, input, fade dan animasi memakai tick nominal 30 Hz; tes 30/60/144 FPS lulus. Trig integer SDK lulus empat suite title dan dua capture. | Timing NTSC fraksional dan acuan PS1 terkontrol. |
 | 5.6 | Sebagian | Intro, dua lapis latar, enam grup aktor, teks asli, musik, SFX dan navigasi/setup terhubung. | Window/dialog retail dan kesetaraan visual/audio. |
 | 5.7 | Lulus untuk fixture dan data lokal | Seluruh 19 suite lulus; oracle piksel animasi, replay setup, batas nama/calendar dan lifecycle SDL dummy. | Uji desktop/controller/dengar serta input/timing yang sama dengan PS1. |
 | 5.8 | Batas fitur teruji | New Game menyelesaikan setup; log/panel menjelaskan gameplay fase 06 dan Continue fase 07. | Tujuan gameplay/save-load belum berfungsi; tidak dihitung lulus. |

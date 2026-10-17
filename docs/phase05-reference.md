@@ -65,3 +65,9 @@ CTest exit 0), ditambah tiga capture data asli untuk kedua pilihan dan retry;
 lihat [native-title.md](native-title.md#birthday-header-and-final-review-windows-debug-validated).
 Gerbang 5.7 memerlukan
 urutan input yang tercatat serta pengukuran pada acuan yang terkontrol.
+
+Gerak latar integer SDK lulus empat suite title (277,58 detik, CTest exit 0)
+dan dua capture seluruh framebuffer.
+Audit semua sudut cocok dengan fungsi asli; ini tidak memperkuat video menjadi
+acuan timing atau audio. Lihat
+[native-title.md](native-title.md#integer-scenery-wave-windows-debug-validated).

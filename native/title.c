@@ -284,6 +284,15 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
     if (ok) ok=btn_name_layout_valid(&t->name_layout)
         && exe_read(exe,UINT32_C(0x8005E290),tables,4);
     if (ok) t->random=btn_read_le32(tables);
+    /* csincos at 80036D84 reads six signed words from this SDK angle table. */
+    for (unsigned i=0; ok && i<6; ++i) {
+        ok=exe_read(exe,UINT32_C(0x80058264)+i*4,tables,4);
+        if (ok) {
+            uint32_t step=btn_read_le32(tables);
+            ok=step>0 && step<=1024 && (!i || step<t->wave_angles[i-1]);
+            if (ok) t->wave_angles[i]=(uint16_t)step;
+        }
+    }
     /* runtime/main.c selects palette 3; text_glyph_sprite maps its CLUT row. */
     if (ok) ok=exe_read(exe,UINT32_C(0x80049044)+3*2,tables,2);
     if (ok) { t->text_clut_y=le16(tables); ok=t->text_clut_y<BTN_VRAM_H; }

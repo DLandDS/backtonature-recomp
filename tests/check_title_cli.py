@@ -4,7 +4,6 @@ Synthetic inputs ship as generators. Optional retail bytes/captures stay local.
 The pixel oracle checks the supported static title layers, not PS1 parity.
 """
 import os
-import math
 from pathlib import Path
 import struct
 import subprocess
@@ -126,6 +125,7 @@ def fixture(folder):
     write(0x800559D4,struct.pack('<28H',*range(0x60,0x60+28)))
     write(0x80049044+6,struct.pack('<H',252))
     write(0x80049052,struct.pack('<H',3))
+    write(0x80058264,struct.pack('<6I',512,300,160,80,40,20))
     for address,base in ((0x800537B2,0),(0x80053888,4)):
         write(address,struct.pack('<7H',base,base+1,0xFFD,base+2,0xFFFE,base+3,0xFFFF))
     write(0x8005175C,struct.pack('<9H',0xFFD,0,1,2,0xFFFE,0xFFD,3,4,0xFFFF))
@@ -156,6 +156,20 @@ def bmp(path):
             offset = start+row*stride+x*(depth//8)
             result += data[offset:offset+3][::-1]
     return bytes(result)
+
+
+def sdk_wave(folder, angle, sine):
+    steps=exe_words(folder,0x80058264,12)[::2]
+    angle %= 4096
+    quadrant=angle//1024
+    z=(angle,2047-angle,angle-2048,4095-angle)[quadrant]
+    x,y=2487,0
+    for shift,step in enumerate(steps):
+        dx,dy=y>>shift,x>>shift
+        if z>=0: x,y,z=x-dx,y+dy,z-step
+        else: x,y,z=x+dx,y-dy,z+step
+    value=y+((z*x)>>12) if sine else x-((z*y)>>12)
+    return -value if (quadrant>=2 if sine else quadrant in (1,2)) else value
 
 
 def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
@@ -232,8 +246,8 @@ def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
     phase = [(tick-1)//2%960,(tick-1)%960]
     for layer in range(2):
         y = phase[layer]%240*(1 if layer else -1)
-        angle = phase[1]*4096/120*6.283185307179586/4096
-        trig = round((math.sin(angle) if layer else math.cos(angle))*4096)
+        angle = phase[1]*4096//120
+        trig = sdk_wave(folder,angle,bool(layer))
         horizontal = 320-phase[layer]//240*80+int(trig*12/4096)
         xs = [y-horizontal,y+horizontal-320 if layer else y-horizontal+320,
               y+horizontal-640 if layer else y-horizontal+640]
@@ -279,8 +293,8 @@ def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
                         color = (color&0x8000)|sum((((back>>shift)&31)//2+((color>>shift)&31)//2)<<shift for shift in (0,5,10))
                     frame[y*320+x] = color
     if intro:
-        assert tick<9, 'This oracle snapshot covers the initial fade before the logo enters'
-        subtract = min(255,((0xFF000//10)*(9-tick))//4096)>>3
+        assert tick<30, 'This oracle snapshot covers scenery before the logo enters'
+        subtract = min(255,((0xFF000//10)*max(0,9-tick))//4096)>>3
         frame = [sum(max(0,((c>>shift)&31)-subtract)<<shift for shift in (0,5,10)) for c in frame]
     return b''.join(map(rgb, frame))
 
@@ -495,6 +509,9 @@ def check(executable, retail=None):
         before = capture.read_bytes()
         run(executable,*common,'--output',capture,code=1)
         assert capture.read_bytes() == before
+        wave_capture=root/'wave.bmp'
+        run(executable,*common,'--frames','12','--output',wave_capture)
+        assert bmp(wave_capture)==reference(source,intro=True,tick=12), 'SDK integer scenery wave differs'
         events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,16),(35,0),
                   (36,32),(37,0),(38,32),(39,0),(40,64),(41,0)]
         script = root/'menu.input'
@@ -628,6 +645,9 @@ def check(executable, retail=None):
                                     (0x80051A94,struct.pack('<H',0x400A)),
                                     (0x80051AAA,bytes(30)),
                                     (0x80049052,struct.pack('<H',6)),
+                                    (0x80058264,struct.pack('<I',0)),
+                                    (0x80058264,struct.pack('<I',1025)),
+                                    (0x80058264+4,struct.pack('<I',512)),
                                     (0x80053946,struct.pack('<H',0x400A)),
                                     (0x80051AF6,struct.pack('<H',0x400B)),
                                     (0x80051AF6,bytes(134)),

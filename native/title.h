@@ -48,12 +48,16 @@ typedef struct {
     unsigned speech_interval;
     BtnAnimationCursor actors[6], actor_frames[14];
     unsigned actor_ticks[6], background[2], background_frame[2];
+    uint16_t wave_angles[6];
     uint32_t random;
 } BtnTitle;
 
 /* CPU-native title and new-game setup; never an overlay interpreter.
  * Scene state resets independently of resource loading. */
 void btn_title_reset(BtnTitleState *state);
+/* SDK ccos/csin integer path for nonnegative angles, wrapping at 4096. The
+ * caller supplies six validated CORDIC steps from the executable. */
+int btn_title_wave(const uint16_t steps[6], unsigned angle, bool sine);
 int btn_title_step(BtnTitleState *state, const BtnInput *input);
 const char *btn_title_notice(const BtnTitleState *state);
 /* Zero-initialize; close also cleans up a failed open. Archive stays caller-owned. */

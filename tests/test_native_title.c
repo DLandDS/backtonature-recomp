@@ -163,6 +163,19 @@ static void enter_one_name(BtnTitleSetup *s, const BtnNameLayout *l)
     CHECK(setup_press(s,l,BTN_A)==0 && !s->confirming);
 }
 
+static void wave_checks(void)
+{
+    const uint16_t steps[6]={512,300,160,80,40,20};
+    uint32_t checksum=UINT32_C(2166136261);
+    for (unsigned angle=0; angle<4096; ++angle) for (unsigned sine=0; sine<2; ++sine) {
+        int value=btn_title_wave(steps,angle,sine!=0);
+        CHECK(value==btn_title_wave(steps,angle+4096,sine!=0));
+        checksum=(checksum^(uint32_t)value)*UINT32_C(16777619);
+    }
+    /* Independent bounded SDK execution, with this synthetic angle table. */
+    CHECK(checksum==UINT32_C(313219461));
+}
+
 static void summary_checks(void)
 {
     BtnTitleSetup s; btn_setup_reset(&s);
@@ -298,7 +311,7 @@ int main(void)
     advance(&state,500); CHECK(state.intro_stage>=3 && state.logo_y==0 && state.copyright_y==0);
     advance(&state,1300); CHECK(state.pending && state.target==BTN_TITLE_ATTRACT);
     advance(&state,21); CHECK(state.page==BTN_TITLE_ATTRACT);
-    setup_checks(); dialog_checks(); speech_checks(); summary_checks();
+    setup_checks(); dialog_checks(); speech_checks(); summary_checks(); wave_checks();
 
     /* Presentation rate must not change menu simulation; pause discards elapsed time. */
     const unsigned rates[]={30,60,144};

@@ -182,19 +182,39 @@ static bool setup_draw(BtnTitle *t)
         && icon(t,11,1,36,174+(int)s->choice*14);
 }
 
+/* Preserve MIPS arithmetic shifts without relying on signed C right shift. */
+static int wave_shift(int value, unsigned bits)
+{
+    int scale=1<<bits;
+    return value>=0 ? value/scale : -1-(-(value+1)/scale);
+}
+
+int btn_title_wave(const uint16_t steps[6], unsigned angle, bool sine)
+{
+    unsigned quadrant=(angle&4095u)/1024;
+    int z=(int)(angle&1023u), x=2487, y=0;
+    if (quadrant&1u) z=1023-z;
+    /* SDK csincos: six rotations followed by the residual-angle correction. */
+    for (unsigned i=0; i<6; ++i) {
+        int dx=wave_shift(y,i), dy=wave_shift(x,i);
+        if (z>=0) { x-=dx; y+=dy; z-=steps[i]; }
+        else { x+=dx; y-=dy; z+=steps[i]; }
+    }
+    int value=sine ? y+wave_shift(z*x,12) : x-wave_shift(z*y,12);
+    return (sine ? quadrant>=2 : quadrant==1 || quadrant==2) ? -value : value;
+}
+
 static bool scenery(BtnTitle *t)
 {
     static const int positions[14][2]={{282,173},{33,146},{51,182},{295,205},{258,138},{280,121},
         {63,149},{10,188},{9,214},{295,52},{294,30},{23,30},{6,109},{36,223}};
     if (!sprite(t,29,6,0,0)) return false;
-    /* 800B944C: two 3x3 tiled layers. SDK ccos/csin quantization remains
-     * a PS1-comparison gate; host trig preserves the audited motion geometry. */
+    /* 800B944C: two 3x3 tiled layers, integer angle and SDK CORDIC output. */
     for (unsigned layer=0; layer<2; ++layer) {
         unsigned phase=t->background_frame[layer];
         int y=(int)(phase%240)*(layer ? 1 : -1);
-        double angle=(double)t->background_frame[1]*4096.0/120.0;
-        int trig=(int)SDL_round((layer ? SDL_sin(angle*6.283185307179586/4096.0)
-            : SDL_cos(angle*6.283185307179586/4096.0))*4096.0);
+        unsigned angle=t->background_frame[1]*4096/120;
+        int trig=btn_title_wave(t->wave_angles,angle,layer!=0);
         int horizontal=320-(int)(phase/240)*80+trig*12/4096;
         int x[3]={y-horizontal,layer ? y+horizontal-320 : y-horizontal+320,
             layer ? y+horizontal-640 : y-horizontal+640};
