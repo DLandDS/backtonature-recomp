@@ -38,6 +38,7 @@ typedef struct {
     uint16_t name_captions[2][128];
     uint16_t yes_no[16], setup_prompts[2][64];
     uint16_t setup_questions[4][16];
+    uint16_t birthday_caption[14], summary_format[BTN_SETUP_SUMMARY_FORMAT_WORDS], review_options[64];
     unsigned text_clut_y;
     BtnTitleSetup setup;
     BtnTitleDialog dialog;

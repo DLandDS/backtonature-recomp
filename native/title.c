@@ -139,16 +139,16 @@ static bool exe_caption(SDL_IOStream *file, uint32_t address, uint16_t *out, uns
     return SDL_SetError("Title keyboard caption has no bounded END");
 }
 
-static bool setup_prompt(BtnArchive *archive, unsigned member, unsigned slot, uint16_t out[64])
+static bool setup_prompt(BtnArchive *archive, unsigned member, unsigned slot, uint16_t prefix, uint16_t out[64])
 {
     uint8_t header[4], bytes[128];
     if (!btn_archive_read(archive,member,slot*8192,4,header,sizeof(header))
         || btn_read_le32(header)!=UINT32_MAX
         || !btn_archive_read(archive,member,slot*8192+6144,sizeof(bytes),bytes,sizeof(bytes)))
         return SDL_SetError("Setup prompt requires a bounded text-only message slot");
-    /* These retail prompts start with NO_SCROLL: RenderDialogTextPage fills
-     * textIndex up to END, so their complete text appears when the box is ready. */
-    if (le16(bytes)!=0xFF3) return SDL_SetError("Setup prompt has no NO_SCROLL prefix");
+    /* Name/birthday use NO_SCROLL; final review uses CHOICE_2. Both are read
+     * as bounded text-only streams, never as host code or unchecked pointers. */
+    if (le16(bytes)!=prefix) return SDL_SetError("Setup message has an unexpected prefix");
     for (unsigned i=0; i<63; ++i) {
         uint16_t word=(uint16_t)le16(bytes+(i+1)*2);
         out[i]=word;
@@ -157,6 +157,23 @@ static bool setup_prompt(BtnArchive *archive, unsigned member, unsigned slot, ui
             return SDL_SetError("Unsupported setup prompt control");
     }
     return SDL_SetError("Setup prompt has no bounded END");
+}
+
+static bool review_choices_valid(const uint16_t words[64])
+{
+    unsigned rows=0, column=0, glyphs=0;
+    for (unsigned i=0; i<64; ++i) {
+        uint16_t w=words[i];
+        if (w==0xFFFF) return rows==2 && glyphs>0;
+        if (w==0xFFFE) {
+            if ((rows && !glyphs) || ++rows>2) return false;
+            column=glyphs=0;
+        } else {
+            if (!rows || ++column>32) return false;
+            if (w!=0xFFD) ++glyphs;
+        }
+    }
+    return false;
 }
 
 static bool read_sound(BtnArchive *archive, SDL_IOStream *exe, unsigned index,
@@ -281,12 +298,24 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
     const unsigned question_words[4]={11,15,12,11};
     for (unsigned i=0; ok && i<4; ++i)
         ok=exe_caption(exe,questions[i],t->setup_questions[i],question_words[i]);
+    if (ok) ok=exe_caption(exe,UINT32_C(0x80053946),t->birthday_caption,14);
+    uint8_t summary_bytes[BTN_SETUP_SUMMARY_FORMAT_WORDS*2];
+    if (ok) ok=exe_read(exe,UINT32_C(0x80051AF6),summary_bytes,sizeof(summary_bytes));
+    if (ok) {
+        for (unsigned i=0; i<BTN_SETUP_SUMMARY_FORMAT_WORDS; ++i)
+            t->summary_format[i]=(uint16_t)le16(summary_bytes+i*2);
+        BtnNewGame sample={0}; uint16_t expanded[BTN_SETUP_SUMMARY_WORDS];
+        sample.player[0]=sample.farm[0]=sample.dog[0]=0xFFFF;
+        ok=btn_setup_summary(&sample,t->summary_format,BTN_SETUP_SUMMARY_FORMAT_WORDS,expanded)!=0;
+    }
     if (ok) ok=exe_read(exe,UINT32_C(0x80049052),tables,2);
     if (ok) { t->speech_interval=le16(tables); ok=t->speech_interval<=5; }
     if (!SDL_CloseIO(exe)) return false;
     if (!ok) return SDL_SetError("Title sound/text tables or resources are incompatible");
-    if (!setup_prompt(archive,prompt_member,0x3A6,t->setup_prompts[0])
-        || !setup_prompt(archive,prompt_member,0x3A7,t->setup_prompts[1])) return false;
+    if (!setup_prompt(archive,prompt_member,0x3A6,0xFF3,t->setup_prompts[0])
+        || !setup_prompt(archive,prompt_member,0x3A7,0xFF3,t->setup_prompts[1])
+        || !setup_prompt(archive,prompt_member,0x3AA,0xFFA,t->review_options)) return false;
+    if (!review_choices_valid(t->review_options)) return SDL_SetError("Title review requires two bounded choices");
     if (!read_speech(t,archive,prompt_member)) return false;
     if (!btn_animation_read(archive,0,151552,&t->ui_animation_data,&t->ui_animation)) return false;
     if (t->ui_animation.consumed!=5084 || t->ui_animation.ranges!=44

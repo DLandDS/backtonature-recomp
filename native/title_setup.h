@@ -8,6 +8,8 @@ typedef enum {
     BTN_SETUP_FARM, BTN_SETUP_DOG, BTN_SETUP_REVIEW, BTN_SETUP_DONE
 } BtnSetupStage;
 
+enum { BTN_SETUP_SUMMARY_FORMAT_WORDS=67, BTN_SETUP_SUMMARY_WORDS=128 };
+
 typedef struct {
     uint16_t player[9], farm[9], dog[9];
     uint16_t season, day; /* Both zero-based, as in FarmBirthday. */
@@ -37,6 +39,10 @@ uint16_t btn_name_character(const BtnNameLayout *layout, unsigned cell, unsigned
  * No file I/O, PS1 pointers, save format or gameplay state is fabricated here. */
 int btn_setup_step(BtnTitleSetup *setup, const BtnNameLayout *layout, const BtnInput *input);
 const uint16_t *btn_setup_name(const BtnTitleSetup *setup);
+/* Expand only the three name inserts used by the title summary. Returns the
+ * output length including END, or zero for unsupported/bounded-invalid data. */
+size_t btn_setup_summary(const BtnNewGame *game, const uint16_t *format, size_t count,
+    uint16_t out[BTN_SETUP_SUMMARY_WORDS]);
 /* Pad repeat keeps running while a dialog blocks actions. */
 void btn_setup_observe_input(BtnTitleSetup *setup, const BtnInput *input);
 

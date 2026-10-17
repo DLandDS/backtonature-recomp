@@ -9,8 +9,43 @@ tervalidasi Windows Debug: 19/19 lulus, 0 gagal, 60,02 detik, CTest exit 0.
 Lanjutan panel pertanyaan lulus empat suite title: 60,15 detik, CTest exit 0.
 Dialog wali kota lulus empat suite title (227,58 detik, CTest exit 0);
 koreksi indikator berikutnya lulus rebuild (exit 0) dan dua capture terarah.
+Header ulang tahun/review akhir lulus empat suite title (256,64 detik,
+CTest exit 0) dan tiga capture data asli tambahan.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
 visual/timing/audio PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Header ulang tahun dan review akhir — tervalidasi Windows Debug
+
+Lanjutan setelah `5d7ff69` memakai caption lengkap ulang tahun dari executable
+`0x80053946`, termasuk tanda baca/garis miring. Angka hari satu digit memakai
+spasi awal, mengikuti `text_format_number`; kalender ikut memakai format ini.
+
+Ringkasan mengikuti fungsi overlay `0x800B9124`: panel `(72,56,176,90)`, teks
+`(76,60)` berjarak `(0,1)`, ikon musim `(172,72)` dan tanggal `(188,72)`.
+Template 67 word dari `0x80051AF6` diekspansi secara berbatas untuk tiga nama;
+insert tak didukung, nama tak valid, END hilang dan overflow ditolak.
+
+Pilihan akhir membaca slot teks `0x3AA` (CHOICE_2) sebagai dua baris asli,
+teks `(30,168)` jarak `(0,2)` dan cursor `(36,174 + pilihan*14)`. A/Z
+mengonfirmasi; B/X dan Start diabaikan. Arah diproses lebih dulu bila ditekan
+bersama A. Pilihan kedua kembali ke pertanyaan nama, tanpa Welcome dan tanpa
+handoff; pilihan pertama menunggu kotak/fade selesai sebelum handoff.
+
+Tes C dan CLI diperluas untuk pemformatan, kedua pilihan/row cursor, reset
+Try again serta input/resource rusak. Audit sumber/data, syntax Python dan
+layout fixture lulus; oracle ringkasan baru menolak capture native lama.
+Hasil pengguna: **4/4 suite title lulus, 256,64 detik, CTest exit 0**.
+Unit 0,03 detik, CLI 84,27, tools 0,14, data asli 172,18. Exit code build
+tidak dilaporkan terpisah; skrip menjalankan CTest hanya setelah build berhasil.
+Lima belas suite lain tidak diulang.
+
+Tiga capture data asli tambahan berhasil (exit 0): pilihan pertama 1044 frame,
+pilihan kedua 1046 dan pembukaan ulang pertanyaan nama 1080. Pemeriksaan piksel
+ringkasan/teks/cursor kedua pilihan lulus; log retry membuktikan reset nama,
+aktivasi pertanyaan nama dan tidak ada handoff. Ketiganya diperiksa visual.
+Bukti lokal: `build/native-validation/phase05-review-windows-evidence.json`,
+audit `phase05-review-audit.json`, capture `phase05-review-{ok,retry,name-again}.bmp/png`.
+Asset dan capture tetap lokal. Kesetaraan timing/input/audio PS1 masih terbuka.
 
 ## Dialog wali kota — tervalidasi dengan koreksi indikator terarah
 

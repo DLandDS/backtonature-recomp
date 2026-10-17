@@ -163,6 +163,31 @@ static void enter_one_name(BtnTitleSetup *s, const BtnNameLayout *l)
     CHECK(setup_press(s,l,BTN_A)==0 && !s->confirming);
 }
 
+static void summary_checks(void)
+{
+    BtnTitleSetup s; btn_setup_reset(&s);
+    const uint16_t format[]={0,0xFFD,0x400A,0xFFFE,0x400D,0xFFFE,0x400C,0xFFFF};
+    s.game.player[0]=1; s.game.player[1]=0xFFFF;
+    s.game.farm[0]=2; s.game.farm[1]=3; s.game.farm[2]=0xFFFF;
+    s.game.dog[0]=4; s.game.dog[1]=0xFFFF;
+    uint16_t out[BTN_SETUP_SUMMARY_WORDS];
+    const uint16_t expected[]={0,0xFFD,1,0xFFFE,2,3,0xFFFE,4,0xFFFF};
+    CHECK(btn_setup_summary(&s.game,format,8,out)==9 && !memcmp(out,expected,sizeof(expected)));
+    const uint16_t unsupported[]={0x400B,0xFFFF};
+    CHECK(!btn_setup_summary(&s.game,unsupported,2,out));
+    CHECK(!btn_setup_summary(&s.game,format,7,out));
+    CHECK(!btn_setup_summary(&s.game,format,BTN_SETUP_SUMMARY_FORMAT_WORDS+1,out));
+    s.game.player[0]=0x400A; CHECK(!btn_setup_summary(&s.game,format,8,out));
+    for (unsigned i=0; i<9; ++i) s.game.player[i]=0;
+    CHECK(!btn_setup_summary(&s.game,format,8,out));
+    s.game.player[8]=0xFFFF;
+    CHECK(btn_setup_summary(&s.game,format,8,out)==16);
+    uint16_t oversized[BTN_SETUP_SUMMARY_FORMAT_WORDS];
+    for (unsigned i=0; i<BTN_SETUP_SUMMARY_FORMAT_WORDS-1; ++i) oversized[i]=0x400A;
+    oversized[BTN_SETUP_SUMMARY_FORMAT_WORDS-1]=0xFFFF;
+    CHECK(!btn_setup_summary(&s.game,oversized,BTN_SETUP_SUMMARY_FORMAT_WORDS,out));
+}
+
 static void setup_checks(void)
 {
     BtnNameLayout l=layout(); CHECK(btn_name_layout_valid(&l));
@@ -183,6 +208,8 @@ static void setup_checks(void)
     }
     BtnTitleSetup s; btn_setup_reset(&s);
     CHECK(s.stage==BTN_SETUP_PLAYER && s.game.player[8]==0xFFFF && s.game.farm[0]==0xFFFF);
+    BtnInput mixed={0}; mixed.pressed=mixed.held=BTN_BIT(BTN_A)|BTN_BIT(BTN_RIGHT);
+    CHECK(btn_setup_step(&s,&l,&mixed)==-1 && !s.cell && !s.length);
     CHECK(setup_press(&s,&l,BTN_START)==2 && !s.confirming);
     CHECK(setup_press(&s,&l,BTN_B)==2 && s.stage==BTN_SETUP_PLAYER);
     s.cell=27; CHECK(setup_press(&s,&l,BTN_A)==0 && s.length==1 && !s.dirty);
@@ -215,6 +242,16 @@ static void setup_checks(void)
     CHECK(setup_press(&s,&l,BTN_B)==1 && s.stage==BTN_SETUP_FARM && !s.length);
     enter_one_name(&s,&l); enter_one_name(&s,&l);
     CHECK(s.stage==BTN_SETUP_REVIEW && s.game.player[0]==0 && s.game.farm[0]==0 && s.game.dog[0]==0);
+    CHECK(setup_press(&s,&l,BTN_B)==-1 && s.stage==BTN_SETUP_REVIEW);
+    CHECK(setup_press(&s,&l,BTN_START)==-1 && s.stage==BTN_SETUP_REVIEW);
+    BtnTitleSetup review=s;
+    CHECK(setup_press(&s,&l,BTN_DOWN)==5 && s.choice==1);
+    CHECK(setup_press(&s,&l,BTN_A)==0 && s.stage==BTN_SETUP_PLAYER && s.game.player[0]==0xFFFF && !s.game.flags);
+    s=review;
+    BtnInput simultaneous={0}; simultaneous.pressed=BTN_BIT(BTN_A)|BTN_BIT(BTN_DOWN);
+    simultaneous.held=simultaneous.pressed;
+    CHECK(btn_setup_step(&s,&l,&simultaneous)==5 && s.choice==1 && s.stage==BTN_SETUP_REVIEW);
+    s=review;
     CHECK(setup_press(&s,&l,BTN_A)==0 && s.stage==BTN_SETUP_DONE && s.game.flags==0x2000);
     BtnTitle title={0}; title.setup=s; title.state.page=BTN_TITLE_READY;
     CHECK(btn_title_new_game(&title)==&title.setup.game);
@@ -261,7 +298,7 @@ int main(void)
     advance(&state,500); CHECK(state.intro_stage>=3 && state.logo_y==0 && state.copyright_y==0);
     advance(&state,1300); CHECK(state.pending && state.target==BTN_TITLE_ATTRACT);
     advance(&state,21); CHECK(state.page==BTN_TITLE_ATTRACT);
-    setup_checks(); dialog_checks(); speech_checks();
+    setup_checks(); dialog_checks(); speech_checks(); summary_checks();
 
     /* Presentation rate must not change menu simulation; pause discards elapsed time. */
     const unsigned rates[]={30,60,144};

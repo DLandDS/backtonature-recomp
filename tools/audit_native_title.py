@@ -111,6 +111,30 @@ def audit(directory):
                 raise ValueError('Unsupported setup prompt control')
             result['setup_prompts'].append(dict(member=prompt_member,slot=slot,text_offset=6144,
                 words_including_end=end,sha256=hashlib.sha256(raw_text[:end*2]).hexdigest()))
+        birthday=exe.read(0x80053946,28)
+        birthday_words=struct.unpack('<14H',birthday)
+        if birthday_words[-1]!=0xFFFF or any(w>255 and w!=0xFFD for w in birthday_words[:-1]):
+            raise ValueError('Birthday caption requires a bounded glyph stream')
+        summary=exe.read(0x80051AF6,134); summary_words=struct.unpack('<67H',summary)
+        if summary_words[-1]!=0xFFFF or any(w>255 and w not in (0xFFD,0xFFFE,0x400A,0x400C,0x400D) for w in summary_words[:-1]):
+            raise ValueError('Summary template requires the three supported name inserts')
+        options_raw=messages.read(0x3AA*8192+6144,128); options=struct.unpack('<64H',options_raw)
+        options=options[:options.index(0xFFFF)+1]
+        if messages.read(0x3AA*8192,4)!=b'\xFF'*4 or options[:2]!=(0xFFA,0xFFFE) or options.count(0xFFFE)!=2:
+            raise ValueError('Title review requires a text-only CHOICE_2 slot')
+        if any(w>255 and w not in (0xFFD,0xFFFE,0xFFFF) for w in options[2:]):
+            raise ValueError('Unsupported title review choice control')
+        result['setup_review']=dict(draw_function='0x800B9124',box=[72,56,176,90],text_position=[76,60],spacing=[0,1],
+            template_address='0x80051AF6',template_words=67,template_sha256=hashlib.sha256(summary).hexdigest(),
+            name_inserts=[hex(x) for x in summary_words if x in (0x400A,0x400C,0x400D)],
+            season_position=[172,72],date_position=[188,72],date_format='slash plus two digits with leading SPACE',
+            choices_member=prompt_member,choices_slot=0x3AA,choices_words=len(options),
+            choices_sha256=hashlib.sha256(options_raw[:len(options)*2]).hexdigest(),
+            choices_position=[30,168],choices_spacing=[0,2],cursor_position=[36,174],cursor_row_step=14,
+            input='Direction before A confirmation; B/Start do not cancel. Second choice repeats the name question.',
+            birthday_caption_address='0x80053946',birthday_caption_words=14,
+            birthday_caption_sha256=hashlib.sha256(birthday).hexdigest(),
+            sources=['src/text/dialog.c:text_format_number/text_choice_menu','src/ui/name_entry.c:name_sound_draw_frame'])
         result['mayor_messages'] = []
         portrait_hash=None
         for slot in (0x3A2,0x397,0x3A5,0x3A4,0x3A3):

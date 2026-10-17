@@ -22,6 +22,8 @@ window/dialog appearance, trig quantization and audio parity are separate gates.
 The mayor dialog/portrait/reveal update passes the four title suites before a
 wait-icon correction; the corrected build passes targeted synthetic/real-data
 portrait/text/wait-indicator checks (build exit 0). Details are recorded below.
+The subsequent birthday-header/final-review update passes all four title suites
+(256.64 seconds, CTest exit 0) and three additional real-data capture checks.
 The follow-up original setup question panels pass all four title suites
 (60.15 seconds, CTest exit 0). The other 15 suites were not repeated for this change.
 Video observations and the source/data mapping are recorded in
@@ -247,9 +249,10 @@ The model advances only in simulation ticks and gates all setup input/handoff.
 
 This is a bounded source reconstruction. Async I/O stalls, exact first-glyph
 scheduling, hardware raster/audio and NTSC fractional timing need controlled
-PS1 comparison. Arbitrary faces, inserts, waits, choices and scrolling past
-four lines are rejected. The final review remains native, rather than slot
-`0x3AA`; the birthday header and native keyboard help remain separate gaps.
+PS1 comparison. The mayor-message parser rejects arbitrary faces, inserts,
+waits, choices and scrolling past four lines. At this milestone the final
+review and birthday header were still native adaptations; the following
+section records their source-based follow-up. Native keyboard help remains separate.
 
 New unit checks cover malformed streams, reveal speed, held input at page/end
 waits, portrait persistence and handoff gating. CLI checks decode portrait/text
@@ -275,3 +278,55 @@ Local evidence: `build/native-validation/phase05-mayor-windows-evidence.json`,
 `phase05-mayor-initial-test.json`, `phase05-mayor-wait-audit.json`, and
 `phase05-mayor-wait-{synthetic,retail}.bmp/png`. Earlier partial/page/handoff
 captures retain the pre-correction image and are recorded as such.
+
+## Birthday header and final review (Windows Debug validated)
+
+The birthday header reads the complete 14-word caption at `0x80053946`:
+punctuation, spaces and slash retain their original positions around the season
+icon/day. Calendar and header numbers follow `text_format_number`: single-digit
+values have a leading space. Values 10 through 30 retain both digits.
+
+The summary follows overlay function `0x800B9124`: window `(72,56,176,90)`,
+text `(76,60)` with spacing `(0,1)`, season icon `(172,72)`, and slash/day
+`(188,72)`. The 67-word template comes from executable `0x80051AF6`; a bounded
+host expansion supports only PLAYER_NAME, FARM_NAME and DOG_NAME. Each name is
+at most eight supported glyphs plus END. Unknown inserts, missing END and
+output overflow fail explicitly. No retail text is embedded in source.
+
+Final options come from the text-only slot `0x3AA`, selected through
+`menuWindowValues[3]`. The CHOICE_2 prefix and initial newline are consumed;
+the two original rows draw at `(30,168)` with spacing `(0,2)`, hand at
+`(36,174 + choice*14)`. Both rows appear once the box finishes opening, as in
+`text_start_choice`. Arrow keys select; Z/A confirms. X/B and Start do not
+cancel this menu, matching `text_choice_menu`. Direction has precedence when
+pressed together with A; earlier grid/confirmation input filtering is preserved.
+The second choice repeats the player-name question, without the Welcome dialog
+or a New Game handoff. The first choice waits for the close/fade before handoff.
+
+New unit checks cover supported name expansion, maximum name lengths, malformed
+inserts/output bounds, ignored B/Start, direction precedence and both review
+outcomes. CLI pixel checks cover the original summary/choices, both cursor rows,
+birthday punctuation/spacing, leading-space day numbers and all 30 calendar days.
+The synthetic replay additionally verifies Try again returns to the name question
+without exposing handoff data. Invalid summary/caption/choice streams are rejected.
+
+Source/data audit, Python syntax, synthetic resource layout and regression-oracle
+checks passed. The new summary oracle rejects the previous native review capture.
+The user reports all four title suites passing: native-title 0.03 seconds,
+native-title-cli 84.27, native-title-tools 0.14, native-title-data 172.18;
+total 256.64 seconds, CTest exit 0. The build exit code was not reported
+separately; the supplied script only runs CTest after a successful build.
+The other 15 suites were not repeated.
+
+Three additional real-data headless captures passed (exit 0): review/default
+choice at frame 1044, second choice at 1046, and reopening the name question
+at 1080. Independent summary/text/cursor pixel checks passed for both choices;
+the retry log confirms player-name reset and question-message activation with
+no handoff. All three captures were inspected visually. Local evidence:
+`build/native-validation/phase05-review-windows-evidence.json`,
+`phase05-review-audit.json`, and `phase05-review-{ok,retry,name-again}.bmp/png`.
+Retail assets and captures stay local.
+
+Native keyboard help, the explicit unavailable-gameplay handoff screen and
+controlled PS1 timing/audio comparison remain separate; this update does not
+claim playable gameplay or full phase acceptance.

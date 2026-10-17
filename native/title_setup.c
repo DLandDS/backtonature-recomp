@@ -12,6 +12,30 @@ const uint16_t *btn_setup_name(const BtnTitleSetup *s)
         : s->stage==BTN_SETUP_FARM ? s->game.farm : s->game.dog;
 }
 
+size_t btn_setup_summary(const BtnNewGame *game, const uint16_t *format, size_t count,
+    uint16_t out[BTN_SETUP_SUMMARY_WORDS])
+{
+    if (!game || !format || !out || !count || count>BTN_SETUP_SUMMARY_FORMAT_WORDS) return 0;
+    size_t n=0;
+    for (size_t i=0; i<count; ++i) {
+        uint16_t w=format[i];
+        if (w==0xFFFF) { out[n++]=w; return n; }
+        const uint16_t *name=w==0x400A ? game->player : w==0x400C ? game->dog : w==0x400D ? game->farm : NULL;
+        if (name) {
+            unsigned j=0;
+            for (; j<9 && name[j]!=0xFFFF; ++j) {
+                if (j==8 || (name[j]>255 && name[j]!=0xFFD) || n>=BTN_SETUP_SUMMARY_WORDS-1) return 0;
+                out[n++]=name[j];
+            }
+            if (j==9) return 0;
+        } else {
+            if ((w>255 && w!=0xFFD && w!=0xFFFE) || n>=BTN_SETUP_SUMMARY_WORDS-1) return 0;
+            out[n++]=w;
+        }
+    }
+    return 0;
+}
+
 static void enter_name(BtnTitleSetup *s, BtnSetupStage stage)
 {
     s->stage=stage; s->cell=s->shift=s->length=s->choice=0;
@@ -77,9 +101,8 @@ uint16_t btn_name_character(const BtnNameLayout *layout, unsigned cell, unsigned
     return (uint16_t)(col<5 ? row*5+col : col<10 ? 0x20+row*5+col-5 : 0x40+row*3+col-10);
 }
 
-static uint32_t direction_repeat(BtnTitleSetup *s, const BtnInput *input)
+static uint32_t pad_repeat(BtnTitleSetup *s, const BtnInput *input)
 {
-    const uint32_t directions=BTN_BIT(BTN_UP)|BTN_BIT(BTN_DOWN)|BTN_BIT(BTN_LEFT)|BTN_BIT(BTN_RIGHT);
     uint32_t result=0;
     /* pad_read_record: delay 20/2, rate 7/2; first repeat follows the
      * delay-state change and three further held ticks, not an OS key repeat. */
@@ -89,12 +112,12 @@ static uint32_t direction_repeat(BtnTitleSetup *s, const BtnInput *input)
         if (++s->repeat_ticks>10) { s->repeat_ticks=0; s->repeating=true; }
     } else if (++s->repeat_ticks%3==0) result=input->held;
     s->last_held=input->held;
-    return result & ~directions ? 0 : result;
+    return result;
 }
 
 void btn_setup_observe_input(BtnTitleSetup *s, const BtnInput *input)
 {
-    (void)direction_repeat(s,input);
+    (void)pad_repeat(s,input);
 }
 
 static void name_accepted(BtnTitleSetup *s)
@@ -145,19 +168,29 @@ static int name_step(BtnTitleSetup *s, const BtnNameLayout *layout, uint32_t pre
 
 int btn_setup_step(BtnTitleSetup *s, const BtnNameLayout *layout, const BtnInput *input)
 {
-    uint32_t direction=direction_repeat(s,input), press=input->pressed;
+    const uint32_t directions=BTN_BIT(BTN_UP)|BTN_BIT(BTN_DOWN)|BTN_BIT(BTN_LEFT)|BTN_BIT(BTN_RIGHT);
+    uint32_t repeat=pad_repeat(s,input), press=input->pressed;
+    uint32_t direction=repeat & ~directions ? 0 : repeat;
     if (s->stage==BTN_SETUP_PLAYER || s->stage==BTN_SETUP_FARM || s->stage==BTN_SETUP_DOG)
         return name_step(s,layout,press,direction);
     if (s->stage==BTN_SETUP_DONE) return -1;
-    if (s->stage==BTN_SETUP_BIRTHDAY_CONFIRM || s->stage==BTN_SETUP_REVIEW) {
-        if (press==BTN_BIT(BTN_A) && !s->choice) {
-            if (s->stage==BTN_SETUP_BIRTHDAY_CONFIRM) enter_name(s,BTN_SETUP_FARM);
+    if (s->stage==BTN_SETUP_REVIEW) {
+        /* text_choice_menu: direction takes precedence; only A confirms. */
+        if (repeat & (BTN_BIT(BTN_UP)|BTN_BIT(BTN_DOWN))) { s->choice^=1; return 5; }
+        if (press & BTN_BIT(BTN_A)) {
+            if (s->choice) enter_name(s,BTN_SETUP_PLAYER);
             else { s->stage=BTN_SETUP_DONE; s->game.flags=0x2000; }
             return 0;
         }
+        return -1;
+    }
+    if (s->stage==BTN_SETUP_BIRTHDAY_CONFIRM) {
+        if (press==BTN_BIT(BTN_A) && !s->choice) {
+            enter_name(s,BTN_SETUP_FARM);
+            return 0;
+        }
         if (press==BTN_BIT(BTN_B) || press==BTN_BIT(BTN_A)) {
-            if (s->stage==BTN_SETUP_REVIEW) enter_name(s,BTN_SETUP_PLAYER);
-            else { s->stage=BTN_SETUP_DAY; s->value=s->game.day; }
+            s->stage=BTN_SETUP_DAY; s->value=s->game.day;
             s->choice=0; return 1;
         }
         if (direction & (BTN_BIT(BTN_UP)|BTN_BIT(BTN_DOWN))) { s->choice^=1; return 5; }

@@ -60,5 +60,8 @@ Lanjutan dialog wali kota/portrait/reveal teks telah divalidasi: empat suite
 title lulus (227,58 detik, CTest exit 0), lalu koreksi indikator lulus rebuild
 (exit 0) dan dua capture terarah. Lihat
 [native-title.md](native-title.md#mayor-conversation-windows-debug-validated).
-Format header ulang tahun dan review native tetap terbuka. Gerbang 5.7 memerlukan
+Format header ulang tahun dan review akhir lulus empat suite title (256,64 detik,
+CTest exit 0), ditambah tiga capture data asli untuk kedua pilihan dan retry;
+lihat [native-title.md](native-title.md#birthday-header-and-final-review-windows-debug-validated).
+Gerbang 5.7 memerlukan
 urutan input yang tercatat serta pengukuran pada acuan yang terkontrol.

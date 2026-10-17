@@ -82,7 +82,8 @@ static bool text(BtnTitle *t, int x, int y, const char *value)
 static bool number(BtnTitle *t, int x, int y, unsigned value)
 {
     if (value>99) return SDL_SetError("Title UI number exceeds two digits");
-    char digits[3]={(char)('0'+value/10),(char)('0'+value%10),0};
+    /* text_format_number pads leading zeroes with TEXT_CODE_SPACE. */
+    char digits[3]={value<10 ? ' ' : (char)('0'+value/10),(char)('0'+value%10),0};
     return text(t,x,y,digits);
 }
 
@@ -131,7 +132,7 @@ static bool calendar(BtnTitle *t)
 {
     const char *seasons[4]={"Spring","Summer","Fall","Winter"};
     BtnTitleSetup *s=&t->setup;
-    if (!panel(t,171,32,133,18) || !text(t,173,35,"Birthday")) return false;
+    if (!panel(t,171,32,133,18) || !draw_words(t,t->birthday_caption,14,173,35)) return false;
     if (s->stage!=BTN_SETUP_SEASON && !icon(t,43,s->game.season,253,35)) return false;
     if (s->stage==BTN_SETUP_BIRTHDAY_CONFIRM) return number(t,277,35,s->game.day+1);
     if (!panel(t,20,56,279,103)) return false;
@@ -147,14 +148,15 @@ static bool calendar(BtnTitle *t)
 
 static bool review(BtnTitle *t)
 {
-    const char *seasons[4]={"Spring","Summer","Fall","Winter"};
     const BtnNewGame *g=&t->setup.game;
-    return panel(t,28,44,264,112) && text(t,40,52,"Player")
-        && draw_words(t,g->player,9,152,52)
-        && text(t,40,76,"Birthday") && text(t,152,76,seasons[g->season])
-        && number(t,216,76,g->day+1)
-        && text(t,40,100,"Farm") && draw_words(t,g->farm,9,152,100)
-        && text(t,40,124,"Dog") && draw_words(t,g->dog,9,152,124);
+    uint16_t words[BTN_SETUP_SUMMARY_WORDS];
+    size_t count=btn_setup_summary(g,t->summary_format,BTN_SETUP_SUMMARY_FORMAT_WORDS,words);
+    if (!count) return SDL_SetError("Unsupported title summary data");
+    const BtnTextStyle style={t->text_clut_y,0,1};
+    /* GF_TITLE 800B9124 draws the summary and birthday overlay separately. */
+    return panel(t,72,56,176,90)
+        && btn_text_draw_styled(t->list,1,words,count,76,60,&style,NULL)
+        && icon(t,43,g->season,172,72) && text(t,188,72,"/") && number(t,196,72,g->day+1);
 }
 
 static bool setup_draw(BtnTitle *t)
@@ -174,10 +176,10 @@ static bool setup_draw(BtnTitle *t)
         return calendar(t) && (s->stage!=BTN_SETUP_BIRTHDAY_CONFIRM || yes_no(t,t->setup_prompts[1],s->choice));
     if (!review(t)) return false;
     if (s->stage==BTN_SETUP_DONE || !btn_dialog_ready(&t->dialog,BTN_DIALOG_REVIEW)) return true;
-    /* The typed-handoff review is native UI, outside name_prompt_draw. */
-    return text(t,40,170,"Begin this game?")
-        && text(t,94,192,"Yes") && text(t,182,192,"No")
-        && icon(t,11,1,s->choice ? 180 : 92,198);
+    const BtnTextStyle style={t->text_clut_y,0,2};
+    /* CHOICE_2 skips its first newline and displays both original rows. */
+    return btn_text_draw_styled(t->list,1,t->review_options+1,63,30,168,&style,NULL)
+        && icon(t,11,1,36,174+(int)s->choice*14);
 }
 
 static bool scenery(BtnTitle *t)
