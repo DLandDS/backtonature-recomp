@@ -71,3 +71,9 @@ dan dua capture seluruh framebuffer.
 Audit semua sudut cocok dengan fungsi asli; ini tidak memperkuat video menjadi
 acuan timing atau audio. Lihat
 [native-title.md](native-title.md#integer-scenery-wave-windows-debug-validated).
+
+Screenshot desktop berikutnya menemukan kesalahan susunan petak lapisan kedua;
+oracle sebelumnya ikut memakai koordinat yang salah. Koreksi dan tes cakupan
+48000 susunan lulus dalam native-title (CTest exit 0, total 0,10 detik),
+ditambah enam capture sintetis/data asli pada tick 12, 43 dan 241. Lihat
+[native-title.md](native-title.md#second-layer-tile-coverage-windows-debug-validated).

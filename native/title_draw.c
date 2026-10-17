@@ -204,6 +204,18 @@ int btn_title_wave(const uint16_t steps[6], unsigned angle, bool sine)
     return (sine ? quadrant>=2 : quadrant==1 || quadrant==2) ? -value : value;
 }
 
+void btn_title_tile_positions(unsigned phase, int sway, bool second_layer, int xy[9][2])
+{
+    int y=(int)(phase%240)*(second_layer ? 1 : -1);
+    int horizontal=320-(int)(phase/240)*80+sway;
+    int x=y+(second_layer ? horizontal : -horizontal);
+    for (unsigned row=0; row<3; ++row) for (unsigned col=0; col<3; ++col) {
+        unsigned index=row*3+col;
+        xy[index][0]=x+(int)col*(second_layer ? -320 : 320);
+        xy[index][1]=y+(int)row*(second_layer ? -240 : 240);
+    }
+}
+
 static bool scenery(BtnTitle *t)
 {
     static const int positions[14][2]={{282,173},{33,146},{51,182},{295,205},{258,138},{280,121},
@@ -211,15 +223,12 @@ static bool scenery(BtnTitle *t)
     if (!sprite(t,29,6,0,0)) return false;
     /* 800B944C: two 3x3 tiled layers, integer angle and SDK CORDIC output. */
     for (unsigned layer=0; layer<2; ++layer) {
-        unsigned phase=t->background_frame[layer];
-        int y=(int)(phase%240)*(layer ? 1 : -1);
         unsigned angle=t->background_frame[1]*4096/120;
         int trig=btn_title_wave(t->wave_angles,angle,layer!=0);
-        int horizontal=320-(int)(phase/240)*80+trig*12/4096;
-        int x[3]={y-horizontal,layer ? y+horizontal-320 : y-horizontal+320,
-            layer ? y+horizontal-640 : y-horizontal+640};
-        for (unsigned row=0; row<3; ++row) for (unsigned col=0; col<3; ++col)
-            if (!sprite(t,37,5,x[col],y+(int)row*240)) return false;
+        int xy[9][2];
+        btn_title_tile_positions(t->background_frame[layer],trig*12/4096,layer!=0,xy);
+        for (unsigned i=0; i<9; ++i)
+            if (!sprite(t,37,5,xy[i][0],xy[i][1])) return false;
     }
     for (unsigned i=0; i<14; ++i)
         if (!btn_animation_draw(&t->animation,&t->actor_frames[i],t->list,4,positions[i][0],positions[i][1])) return false;

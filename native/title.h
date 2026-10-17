@@ -58,6 +58,8 @@ void btn_title_reset(BtnTitleState *state);
 /* SDK ccos/csin integer path for nonnegative angles, wrapping at 4096. The
  * caller supplies six validated CORDIC steps from the executable. */
 int btn_title_wave(const uint16_t steps[6], unsigned angle, bool sine);
+/* Nine 320x240 tile anchors. The second layer reverses both grid directions. */
+void btn_title_tile_positions(unsigned phase, int sway, bool second_layer, int xy[9][2]);
 int btn_title_step(BtnTitleState *state, const BtnInput *input);
 const char *btn_title_notice(const BtnTitleState *state);
 /* Zero-initialize; close also cleans up a failed open. Archive stays caller-owned. */

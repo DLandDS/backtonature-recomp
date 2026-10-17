@@ -26,6 +26,8 @@ The subsequent birthday-header/final-review update passes all four title suites
 (256.64 seconds, CTest exit 0) and three additional real-data capture checks.
 The integer scenery-wave correction passes four title suites (277.58 seconds,
 CTest exit 0) and two full-frame capture checks.
+The following second-layer tile-coverage fix passes its unit suite and six
+focused framebuffer checks. Earlier image oracles shared its placement bug.
 The follow-up original setup question panels pass all four title suites
 (60.15 seconds, CTest exit 0). The other 15 suites were not repeated for this change.
 Video observations and the source/data mapping are recorded in
@@ -376,3 +378,49 @@ Local diagnostics remain under ignored `build/native-validation/`:
 `phase05-wave-old.bmp`, `phase05-wave-{synthetic,retail}.bmp/png` and
 `phase05-wave-windows-evidence.json`. Controlled PS1
 input/timing/audio and hardware raster comparisons remain open.
+
+## Second-layer tile coverage (Windows Debug validated)
+
+A user screenshot exposed hard rectangular regions in the scenery. Semi-
+transparency was already enabled: range 37 has attribute 0x94, and its palette
+uses STP colors. The placement of its second 3x3 grid was wrong. Its first X
+anchor used `y-horizontal`, while the source uses `y+horizontal` at
+`0x800B97B4`. Following columns subtract 320/640. The second and third Y rows
+must subtract 240/480 (`0x800B9834`, `0x800B9894`); native added them.
+
+That left part of the viewport without the second layer and blended another
+part twice. The old pixel oracle copied the same placement error, so previous
+passing captures did not prove correct coverage. At phase 120 with zero sway,
+the old second grid submitted only 52800 clipped pixel samples, including 14400
+overlapping samples, instead of covering 76800 distinct screen pixels once.
+
+The corrected layout is isolated in `btn_title_tile_positions`, used by the
+renderer. Independent coverage checks require each layer to cover the full
+320x240 viewport with no overlap, for all 960 phases and all integer sway values
+from -12 through 12: 48000 layouts. This invariant catches both original sign
+errors without copying their expected coordinates. The existing full-frame CLI
+oracle now uses the source-correct anchors.
+
+Local source-instruction checks, Python syntax and the 48000-layout diagnostic
+passed. The corrected oracle rejects the retained old real-data frame.
+
+The user reports native-title passing in 0.08 seconds (CTest total 0.10 seconds,
+exit 0), including the 48000-layout C coverage check. The build exit code was
+not reported separately; the supplied script runs CTest only after build success.
+The other 18 CTest suites were not repeated; the long setup replays were not run.
+
+Six focused captures passed (exit 0): synthetic and real-data at ticks 12, 43
+and 241. Their complete framebuffers match the corrected independent oracle,
+covering early scenery, title/menu and a 240-step row boundary. The real-data
+tick-12 capture differs from the retained old layout; synthetic fixture images
+are small toy sprites, so their captures alone do not establish tile coverage.
+The C coverage invariant and real-data comparisons supply that proof. Real-data
+captures were inspected visually; the rectangular gaps/duplicate blends are gone
+in these checked frames. C/test hashes stayed unchanged after the user result.
+
+Blend equations, palettes, trig, timing and setup logic are unchanged. Local
+proof: `build/native-validation/phase05-tiles-source-proof.json` and
+`phase05-tiles-windows-evidence.json`; captures:
+`phase05-tiles-{synthetic,retail}-{12,43,241}.bmp/png`. Assets/captures stay local.
+The reference PNG is a Python oracle preview, distinct from these native captures.
+Controlled PS1 timing/input/audio and hardware raster parity remain open.

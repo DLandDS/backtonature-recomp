@@ -13,8 +13,41 @@ Header ulang tahun/review akhir lulus empat suite title (256,64 detik,
 CTest exit 0) dan tiga capture data asli tambahan.
 Gerak latar integer SDK lulus empat suite title (277,58 detik, CTest exit 0)
 dan dua capture seluruh framebuffer.
+Koreksi susunan petak berikutnya lulus native-title (CTest exit 0, 0,10 detik)
+dan enam capture terarah; oracle lama ikut memuat bug susunan yang kini diperbaiki.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
 visual/timing/audio PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Susunan petak lapisan kedua — tervalidasi Windows Debug
+
+Screenshot pengguna memperlihatkan batas kotak pada latar. Audit menemukan
+dua tanda yang salah: X petak pertama lapisan kedua seharusnya `y+horizontal`
+(`0x800B97B4`), sedangkan baris berikutnya harus `y-240`/`y-480`
+(`0x800B9834`/`0x800B9894`). Akibatnya ada area kekurangan lapisan dan area
+lain dicampur dua kali. Semitransparansi range 37 sudah aktif, bukan penyebabnya.
+Oracle piksel lama ikut memakai susunan yang salah; hasil sebelumnya tidak
+membuktikan cakupan petak yang benar.
+
+Posisi petak kini dihitung melalui helper yang dipakai renderer. Tes unit
+menambahkan aturan independen: setiap lapisan harus menutup 320x240 tepat
+sekali, tanpa tumpang tindih, pada 960 fase dan sway -12..12 (48000 susunan).
+Diagnostik Python seluruh susunan lulus dan oracle baru menolak capture lama.
+Instruksi sumber serta syntax Python juga diperiksa. Hasil pengguna:
+**1/1 native-title lulus, 0,08 detik; total CTest 0,10 detik, exit 0**,
+termasuk cakupan 48000 susunan dalam C. Exit code build tidak dilaporkan
+terpisah; skrip hanya menjalankan CTest setelah build berhasil. Delapan belas
+suite lain dan replay setup panjang tidak diulang.
+
+Enam capture tambahan berhasil (exit 0): sintetis dan data asli masing-masing
+pada tick 12, 43 dan 241. Seluruh framebuffer cocok dengan oracle yang diperbaiki,
+mencakup menu serta batas baris 240 langkah. Capture data asli berbeda dari
+susunan lama dan diperiksa visual: batas kotak akibat lapisan hilang/tertumpuk
+tidak terlihat pada frame teruji. Fixture sintetis memakai sprite mainan kecil;
+bukti cakupan berasal dari aturan independen C dan perbandingan data asli.
+Hash C/tes tetap sama setelah hasil pengguna; hanya dokumentasi diperbarui.
+Blend/palet, trig, clock, input dan alur setup tidak diubah. Bukti lokal:
+`build/native-validation/phase05-tiles-{source-proof,windows-evidence}.json`
+dan `phase05-tiles-{synthetic,retail}-{12,43,241}.bmp/png` (tidak dikomit).
 
 ## Gerak latar integer SDK — tervalidasi Windows Debug
 

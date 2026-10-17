@@ -163,6 +163,32 @@ static void enter_one_name(BtnTitleSetup *s, const BtnNameLayout *l)
     CHECK(setup_press(s,l,BTN_A)==0 && !s->confirming);
 }
 
+static void tile_checks(void)
+{
+    /* Independent coverage invariant: each layer covers every screen pixel
+     * exactly once, including all quarter/period boundaries and sway values. */
+    for (unsigned phase=0; phase<960; ++phase) for (unsigned layer=0; layer<2; ++layer)
+    for (int sway=-12; sway<=12; ++sway) {
+        int xy[9][2], clipped[9][4], area=0;
+        btn_title_tile_positions(phase,sway,layer!=0,xy);
+        for (unsigned i=0; i<9; ++i) {
+            int *r=clipped[i];
+            r[0]=xy[i][0]>0 ? xy[i][0] : 0;
+            r[1]=xy[i][1]>0 ? xy[i][1] : 0;
+            r[2]=xy[i][0]+320<320 ? xy[i][0]+320 : 320;
+            r[3]=xy[i][1]+240<240 ? xy[i][1]+240 : 240;
+            if (r[2]<=r[0] || r[3]<=r[1]) continue;
+            area+=(r[2]-r[0])*(r[3]-r[1]);
+            for (unsigned j=0; j<i; ++j) {
+                const int *s=clipped[j];
+                if (s[2]<=s[0] || s[3]<=s[1]) continue;
+                CHECK(r[0]>=s[2] || s[0]>=r[2] || r[1]>=s[3] || s[1]>=r[3]);
+            }
+        }
+        CHECK(area==320*240);
+    }
+}
+
 static void wave_checks(void)
 {
     const uint16_t steps[6]={512,300,160,80,40,20};
@@ -311,7 +337,7 @@ int main(void)
     advance(&state,500); CHECK(state.intro_stage>=3 && state.logo_y==0 && state.copyright_y==0);
     advance(&state,1300); CHECK(state.pending && state.target==BTN_TITLE_ATTRACT);
     advance(&state,21); CHECK(state.page==BTN_TITLE_ATTRACT);
-    setup_checks(); dialog_checks(); speech_checks(); summary_checks(); wave_checks();
+    setup_checks(); dialog_checks(); speech_checks(); summary_checks(); wave_checks(); tile_checks();
 
     /* Presentation rate must not change menu simulation; pause discards elapsed time. */
     const unsigned rates[]={30,60,144};

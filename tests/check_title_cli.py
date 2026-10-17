@@ -249,11 +249,11 @@ def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
         angle = phase[1]*4096//120
         trig = sdk_wave(folder,angle,bool(layer))
         horizontal = 320-phase[layer]//240*80+int(trig*12/4096)
-        xs = [y-horizontal,y+horizontal-320 if layer else y-horizontal+320,
+        xs = [y+horizontal if layer else y-horizontal,y+horizontal-320 if layer else y-horizontal+320,
               y+horizontal-640 if layer else y-horizontal+640]
         for row in range(3):
             for col in range(3):
-                tiles.append((37,0,xs[col],y+row*240))
+                tiles.append((37,0,xs[col],y+row*(-240 if layer else 240)))
     layers = [(29,0,0,0)]+list(reversed(tiles))
     positions = [(282,173),(33,146),(51,182),(295,205),(258,138),(280,121),
                  (63,149),(10,188),(9,214),(295,52),(294,30),(23,30),(6,109),(36,223)]
