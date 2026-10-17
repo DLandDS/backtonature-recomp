@@ -43,6 +43,23 @@ def fixture(folder):
                 glyph_pixels[y*64+x//2] |= 1 << ((x%2)*4)
     glyph_bank = b'\x0d\0\x03\0'+palette+dark_palette+struct.pack('<I4H',(4<<24)|len(glyph_pixels),896,0,32,120)+glyph_pixels
     member0 = glyph_bank+b'\0'*(8192-len(glyph_bank)) + animation + images
+    ui = bytearray(5084)
+    struct.pack_into('<I4HI5I',ui,0,14,4,2,2,44,6,36,68,76,100,5024)
+    ui[36:52] = animation[36:52]
+    struct.pack_into('<4h',ui,52,784,500,16,1)
+    struct.pack_into('<4h',ui,60,640,256,2,2)
+    struct.pack_into('<4H',ui,68,1,0,1,12)
+    struct.pack_into('<2H2h4B',ui,76,0,2,-13,-1,0,128,128,128)
+    # Deliberately overlap differently coloured hand/season pixels on the calendar.
+    struct.pack_into('<2H2h4B',ui,88,3,1,1,5,0,128,128,128)
+    for index in range(44):
+        struct.pack_into('<2H',ui,100+index*4,4 if index==43 else 2 if index==11 else 1,20 if index==43 else 0)
+    for index in range(6):
+        struct.pack_into('<H2h4B',ui,5024+index*10,0 if index<2 else 1,0,0,1,255,0,0)
+    ui_images = bytearray(images)
+    struct.pack_into('<H',ui_images,2,struct.unpack_from('<H',images,2)[0]+1)
+    ui_images += struct.pack('<I4H16H',(6<<24)|32,784,500,16,1,*([0]+[0x4210]*15))
+    member0 += b'\0'*(151552-len(member0))+ui+ui_images
     bank = bytes(audio_fixture())
     seq = b'pQES\0\0\0\1\x01\xe0\x07\xa1\x20\x04\x02' + bytes([
         0, 0xC0, 0, 0, 0x90, 60, 127, 0x83, 0x60, 60, 0, 0, 0xFF, 0x2F, 0])
@@ -51,6 +68,11 @@ def fixture(folder):
     struct.pack_into('<5I', overlay, 0xCC, 0x27BDFFE8, 0, 0, 0, 0x248449F8)
     members = [b'']*32
     members[0], members[9], members[27] = member0, bank+bank+seq, overlay
+    prompts = bytearray(0x3A8*8192)
+    for index in (0x3A6,0x3A7):
+        struct.pack_into('<I',prompts,index*8192,0xFFFFFFFF)
+        struct.pack_into('<6H',prompts,index*8192+6144,0xFF3,0,1,2,3,0xFFFF)
+    members[5] = prompts
     offsets = [0]
     for member in members:
         offsets.append(offsets[-1]+len(member))
@@ -78,6 +100,8 @@ def fixture(folder):
     write(0x80049044+6,struct.pack('<H',252))
     for address,base in ((0x800537B2,0),(0x80053888,4)):
         write(address,struct.pack('<7H',base,base+1,0xFFD,base+2,0xFFFE,base+3,0xFFFF))
+    write(0x8005175C,struct.pack('<9H',0xFFD,0,1,2,0xFFFE,0xFFD,3,4,0xFFFF))
+    write(0x8005597C+6,struct.pack('<H',5))
     (folder/'SLUS_011.15').write_bytes(exe)
 
 
@@ -228,24 +252,25 @@ def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
     return b''.join(map(rgb, frame))
 
 
-def check_name_pixels(folder, capture, shifted=False):
-    """Decode font/table independently; verify the loaded palette, spacing and frame."""
-    frame = bmp(capture)
+def exe_words(folder, address, count):
+    exe = (folder/'SLUS_011.15').read_bytes()
+    load, = struct.unpack_from('<I',exe,24)
+    return struct.unpack_from(f'<{count}H',exe,2048+address-load)
+
+
+def text_pixels(folder, words, x, y, spacing_x=0, spacing_y=0):
+    """Decode the original glyph/CLUT data independently of native rendering."""
     offsets = struct.unpack('<33I', (folder/'A_FILE.HDT').read_bytes())
     with (folder/'A_FILE.BIN').open('rb') as stream:
         stream.seek(offsets[0])
         vram, _ = decode_bank(stream.read(8192))
-    exe = (folder/'SLUS_011.15').read_bytes()
-    load, = struct.unpack_from('<I', exe, 24)
-    clut_y, = struct.unpack_from('<H', exe, 2048+0x80049044+6-load)
-    address = 0x80053888 if shifted else 0x800537B2
-    words = struct.unpack_from('<128H', exe, 2048+address-load)
-    x,y,checked = 47,66,0
+    clut_y, = exe_words(folder,0x80049044+6,1)
+    origin,result = x,{}
     for code in words:
         if code == 0xFFFF:
             break
         if code == 0xFFFE:
-            x,y = 47,y+14
+            x,y = origin,y+12+spacing_y
             continue
         if code != 0xFFD:
             assert code <= 255
@@ -256,11 +281,55 @@ def check_name_pixels(folder, capture, shifted=False):
                     index = (packed >> ((u%4)*4)) & 15
                     color = vram[clut_y*1024+896+index]
                     if color:
-                        offset = ((y+dy)*320+x+dx)*3
-                        assert frame[offset:offset+3] == rgb(color), (x+dx,y+dy,code)
-                        checked += 1
-        x += 9
-    assert checked > 0
+                        result[x+dx,y+dy] = rgb(color)
+        x += 8+spacing_x
+    return result
+
+
+def ui_pixels(folder, index, frame_index, ax, ay):
+    offsets = struct.unpack('<33I',(folder/'A_FILE.HDT').read_bytes())
+    with (folder/'A_FILE.BIN').open('rb') as stream:
+        stream.seek(offsets[0]+151552)
+        animation = stream.read(5084)
+        vram,_ = decode_bank(stream.read(min(1024*1024,offsets[1]-offsets[0]-156636)))
+    sections = struct.unpack_from('<5I',animation,16)
+    count,offset = struct.unpack_from('<2H',animation,sections[3]+index*4)
+    assert frame_index < count
+    parts,fx,fy = struct.unpack_from('<H2h',animation,sections[4]+offset+frame_index*10)
+    count,offset = struct.unpack_from('<2H',animation,sections[1]+parts*4)
+    result = {}
+    for part in range(count):
+        image,palette,dx,dy,attr = struct.unpack_from('<2H2hB',animation,sections[2]+offset+part*12)
+        ix,iy,w,h = struct.unpack_from('<4h',animation,sections[0]+image*8)
+        px,py = struct.unpack_from('<2h',animation,sections[0]+palette*8)
+        assert not attr&16, 'Selected UI icon oracle expects opaque sprite parts'
+        depth = 8 if attr&128 else 4
+        scale = 16//depth
+        w *= scale
+        for row in range(h):
+            for col in range(w):
+                u = ((ix&63)*scale+(w-1-col if attr&1 else col))&255
+                v = ((iy&255)+(h-1-row if attr&2 else row))&255
+                packed = vram[(iy//256*256+v)*1024+ix//64*64+u//scale]
+                color = vram[py*1024+px+((packed>>((u%scale)*depth))&((1<<depth)-1))]
+                if color:
+                    result[ax+fx+dx+col,ay+fy+dy+row] = rgb(color)
+    return result
+
+
+def check_pixels(capture, expected):
+    frame = bmp(capture)
+    assert expected
+    for (x,y),color in expected.items():
+        assert frame[(y*320+x)*3:(y*320+x+1)*3] == color, (capture.name,x,y)
+
+
+def check_name_pixels(folder, capture, shifted=False):
+    address = 0x80053888 if shifted else 0x800537B2
+    expected = text_pixels(folder,exe_words(folder,address,128),47,66,1,2)
+    expected.update(ui_pixels(folder,11,1,203 if shifted else 50,72))
+    check_pixels(capture,expected)
+    frame = bmp(capture)
     def pixel(x,y):
         return frame[(y*320+x)*3:(y*320+x+1)*3]
     # Source window_frame_draw: upper/left highlight, lower/right shadow.
@@ -275,6 +344,9 @@ def check(executable, retail=None):
     with tempfile.TemporaryDirectory(prefix='btn-title-') as temporary:
         root = Path(temporary)
         fixture(root)
+        hand = ui_pixels(root,11,1,36,66)
+        season = ui_pixels(root,43,0,30,60)
+        assert any(xy in season and color!=season[xy] for xy,color in hand.items()), 'Fixture must detect cursor/season ordering'
         source = Path(retail).resolve() if retail else root
         common = ['--title','--data-dir',source,'--headless']
         for args in (['--title'], ['--title','--runtime-test','--data-dir',source],
@@ -311,6 +383,42 @@ def check(executable, retail=None):
         for tick,mask in [(59,16),(61,64),(63,16),(65,16),(67,16),(69,16),
                           (71,16),(73,64),(75,16),(77,16),(79,64),(81,16),(83,16)]:
             events += [(tick,mask),(tick+1,0)]
+        for frames in (63,65,67,69):
+            script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
+            capture = root/f'prompt-{frames}.bmp'
+            run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
+            if frames in (63,69):
+                offsets = struct.unpack('<33I',(source/'A_FILE.HDT').read_bytes())
+                member, = exe_words(source,0x8005597C+6,1)
+                slot = 0x3A6 if frames==63 else 0x3A7
+                with (source/'A_FILE.BIN').open('rb') as stream:
+                    stream.seek(offsets[member]+slot*8192+6144)
+                    words = struct.unpack('<64H',stream.read(128))
+                assert words[0]==0xFF3
+                expected = text_pixels(source,words[1:],30,168)
+                expected.update(text_pixels(source,exe_words(source,0x8005175C,16),147,78))
+                expected.update(ui_pixels(source,11,1,153,84))
+                if frames==69:
+                    expected.update(ui_pixels(source,43,0,253,35))
+                check_pixels(capture,expected)
+                # The underlying keyboard/calendar is hidden during confirmation.
+                raw = bmp(capture)
+                y = 64 if frames==63 else 56
+                assert raw[(y*320+100)*3:(y*320+101)*3] != rgb(31 | (29<<5) | (26<<10))
+            else:
+                expected = {}
+                for season in range(4):
+                    expected.update(ui_pixels(source,43,season,30+season*64,60))
+                if frames==67:
+                    expected.update(ui_pixels(source,43,0,253,35))
+                expected.update(ui_pixels(source,11,1,36,66 if frames==65 else 94))
+                check_pixels(capture,expected)
+        # Moving to No uses the second choice row without accepting the name.
+        no_events = [event for event in events if event[0]<63]+[(63,2),(64,0)]
+        script.write_bytes(b''.join(struct.pack('<II',*event) for event in no_events))
+        capture = root/'name-no.bmp'
+        run(executable,*common,'--frames','65','--input-script',script,'--output',capture)
+        check_pixels(capture,ui_pixels(source,11,1,153,96))
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in events))
         output = run(executable,*common,'--frames','106','--input-script',script,'--output',root/'setup.bmp')
         for stage in (1,2,3,4,5,6,7):
@@ -344,6 +452,16 @@ def check(executable, retail=None):
             exe.write_bytes(original)
             archive = root/'A_FILE.BIN'
             data = archive.read_bytes()
+            offsets = struct.unpack('<33I',(root/'A_FILE.HDT').read_bytes())
+            for offset,payload in ((offsets[5]+0x3A6*8192,bytes(4)),
+                                   (offsets[5]+0x3A6*8192+6144,bytes(2)),
+                                   (offsets[5]+0x3A7*8192+6146,struct.pack('<H',0x400A)),
+                                   (offsets[5]+0x3A7*8192+6146,bytes(126)),
+                                   (151552+100+11*4,struct.pack('<H',1))):
+                broken = bytearray(data)
+                broken[offset:offset+len(payload)] = payload
+                archive.write_bytes(broken)
+                run(executable,*common,code=1)
             archive.write_bytes(data[:-1])
             run(executable,*common,code=1)
     print('native-title: CLI/replay bounds, native menu, unsupported destinations, independent sprite pixels and SDL lifecycle passed'

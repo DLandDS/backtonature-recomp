@@ -24,14 +24,16 @@ typedef struct {
     BtnTitleState state;
     BtnGraphics *assets, *graphics;
     BtnDrawList *list;
-    BtnAnimation animation;
+    BtnAnimation animation, ui_animation;
     uint8_t *animation_data, *image_data, *music_data, *sequence_data, *effects_data, *font_data;
+    uint8_t *ui_animation_data, *ui_image_data;
     BtnAudioBank music_bank, effects_bank;
     BtnAudio music, effects;
     BtnSequence sequence;
     uint16_t effect_definitions[6][7];
     BtnNameLayout name_layout;
     uint16_t name_captions[2][128];
+    uint16_t yes_no[16], setup_prompts[2][64];
     unsigned text_clut_y;
     BtnTitleSetup setup;
     BtnAnimationCursor actors[6], actor_frames[14];

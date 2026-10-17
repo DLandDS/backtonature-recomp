@@ -5,6 +5,7 @@ This is an inventory, not a decompiler or proof of native/hardware parity.
 Output must be new and local, normally under ignored build/.
 """
 import argparse
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
@@ -58,6 +59,46 @@ def audit(directory):
         result['images'] = dict(member=0,offset=11548,bytes=bank['byte_size'],blocks=bank['block_count'],
                                 sha256=hashlib.sha256(member0.read(11548,bank['byte_size'])).hexdigest(),
                                 validation=bank['validation'])
+        ui = member0.read(151552,5084)
+        if struct.unpack_from('<I',ui)[0]!=14 or struct.unpack_from('<H',ui,10)[0]!=44:
+            raise ValueError('Shared UI animation layout differs from audited input')
+        sections = struct.unpack_from('<5I',ui,16)
+        if sections[4]+struct.unpack_from('<I',ui,12)[0]*10!=len(ui):
+            raise ValueError('Shared UI animation extent differs from audited input')
+        ui_bank = inspect_container_0d(MemberView(stream,member0.start+156636,member0.size-156636))
+        image_count = struct.unpack_from('<H',ui,4)[0]
+        images = Counter(struct.unpack_from('<4h',ui,sections[0]+i*8) for i in range(image_count))
+        rectangles = Counter(tuple(block['vram_rectangle_words']) for block in ui_bank['blocks'])
+        if images!=rectangles:
+            raise ValueError('Shared UI image/palette rectangles do not match its image bank')
+        font = inspect_container_0d(member0)
+        for ui_rect in rectangles:
+            x,y,w,h = ui_rect
+            for other in bank['blocks']+font['blocks']:
+                ox,oy,ow,oh = other['vram_rectangle_words']
+                if x<ox+ow and ox<x+w and y<oy+oh and oy<y+h:
+                    raise ValueError('Shared UI bank overlaps title/font VRAM')
+        result['shared_ui'] = dict(member=0,animation_offset=151552,animation_bytes=len(ui),
+            animation_sha256=hashlib.sha256(ui).hexdigest(),image_offset=156636,
+            image_bytes=ui_bank['byte_size'],image_blocks=ui_bank['block_count'],
+            image_sha256=hashlib.sha256(member0.read(156636,ui_bank['byte_size'])).hexdigest(),
+            ranges=44,cursor_range=11,cursor_frame=1,season_range=43,season_frames=4,
+            evidence='ui_icons.c/name_entry*.c call these ranges; all image rectangles match the selected bank, with no title/font overlap')
+        prompt_member = struct.unpack('<H',exe.read(0x8005597C+6,2))[0]
+        if prompt_member>=len(spans):
+            raise ValueError('Setup prompt member exceeds HDT')
+        messages = MemberView(stream,spans[prompt_member]['offset'],spans[prompt_member]['span_bytes'])
+        result['setup_prompts'] = []
+        for slot in (0x3A6,0x3A7):
+            raw_text = messages.read(slot*8192+6144,128)
+            words = struct.unpack('<64H',raw_text)
+            if messages.read(slot*8192,4)!=b'\xFF'*4 or words[0]!=0xFF3:
+                raise ValueError('Setup prompt is not a text-only NO_SCROLL slot')
+            end = words.index(0xFFFF)+1
+            if any(word>255 and word not in (0xFFD,0xFFFE) for word in words[1:end-1]):
+                raise ValueError('Unsupported setup prompt control')
+            result['setup_prompts'].append(dict(member=prompt_member,slot=slot,text_offset=6144,
+                words_including_end=end,sha256=hashlib.sha256(raw_text[:end*2]).hexdigest()))
     if exe.read(0x80049296+26*2,2) != bytes([53,54]):
         raise ValueError('Title sound request 26 does not select bank 53 / sequence 54')
     result['sound'] = dict(request=26,bank=53,sequence=54,effects_bank=0,effects_ids=[0,1,2,5],

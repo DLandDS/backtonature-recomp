@@ -4,13 +4,68 @@ Diperbarui: 17 Oktober 2026 (Asia/Jakarta). Baseline: `5645d68`.
 
 ## Status
 
-**Berjalan. Intro/fade, animasi latar/aktor dan setup New Game tervalidasi
-Windows Debug: 19/19 suite CTest lulus, 0 gagal, total 22,89 detik,
-termasuk perubahan bingkai, palet teks dan caption keyboard.
+**Berjalan. Intro/fade, animasi, setup dan UI native tervalidasi Windows Debug.
+Lanjutan cursor/ikon/konfirmasi lulus ulang terarah: data asli 13,66 detik,
+CLI sintetis 6,01 detik (exit 0). Sebanyak 17 suite lain lulus pada run awal.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
-tampilan/timing PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+tampilan/timing PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.
+Hasil 19/19 dalam 22,89 detik tetap dicatat sebagai baseline `77ee140`.**
 
-## Lanjutan UI — tervalidasi Windows Debug
+## Lanjutan cursor/ikon dan konfirmasi — tervalidasi dengan ulang terarah
+
+- Aset UI bersama: member 0, animasi offset 151.552 (5.084 byte, 44 range),
+  bank gambar offset 156.636 (16.152 byte, 140 blok). Seluruh persegi image
+  dan palette cocok dengan bank terpilih; tidak bertumpuk dengan title/font.
+- Cursor tangan memakai range 11 frame 1; ikon musim range 43 frame 0..3.
+  Posisi mengikuti `name_marker_draw`, `name_sound_draw` dan
+  `name_title_build_display`. Cursor menggantikan outline kuning.
+- Konfirmasi nama/ulang tahun membaca Yes/No executable dan teks asli slot
+  `0x3A6`/`0x3A7` dari member yang dipetakan `menuWindowValues[3]` (5 pada US).
+  Kotak pilihan mengikuti `name_prompt_draw`; grid/kalender disembunyikan
+  selama konfirmasi. Input dan data handoff tidak diubah.
+- Audit source/data lulus: `build/native-validation/phase05-icons-audit.json`.
+  Lima capture viewer aset (cursor dan empat musim) berhasil, exit code 0;
+  pikselnya cocok dengan decoder Python independen. Fixture dan syntax Python
+  diperiksa. Validasi C/CLI terbaru dicatat di bawah.
+
+Tes diperluas untuk kedua pilihan, piksel ikon/cursor/prompt, grid tersembunyi,
+slot pesan rusak dan frame cursor yang hilang. Hanya slot teks dengan prefix
+NO_SCROLL dan END berbatas yang didukung. Animasi buka/tutup, efek ketik,
+review native dan perbandingan PS1 tetap merupakan sisa pekerjaan.
+
+Validasi pertama lanjutan ini: **18/19 lulus**, total 26,91 detik, CTest exit 8.
+`native-title-data` gagal pada `prompt-65.bmp`, piksel (34,66). Capture terarah
+mengonfirmasi RGB aktual (123,197,32) sama dengan ikon Spring; cursor seharusnya
+(90,90,90). Cursor dan musim masuk bucket yang sama sehingga musim menimpa
+cursor. Perbaikan memisahkan bucket cursor (0) dari musim/teks (1), mengikuti
+slot OT +0x60 / +0x64 pada `name_sound_draw`. Fixture sintetis kini sengaja
+membuat warna cursor/musim berbeda dan saling bertumpuk agar bug ini tidak
+hanya terdeteksi data asli. Perbaikan kemudian dibuild dan diuji ulang pada
+dua suite CLI/data title; kode core/shared tidak diubah oleh perbaikan ini.
+
+Ulang terarah: `native-title-data` lulus (13,66 detik), sementara
+`native-title-cli` gagal pada fixture, piksel (88,65); total 16,58 detik,
+CTest exit 8. Piksel aktual (8,16,24) adalah teks Spring, sedangkan oracle
+mengharapkan ikon Summer contoh (0,255,0). Ikon sintetis terlalu lebar dan
+ber-offset negatif sehingga menabrak label musim sebelumnya. Fixture dipersempit
+menjadi delapan piksel; benturan cursor/musim dengan warna berbeda dipertahankan.
+Capture kalender sintetis terarah kemudian lulus. Tidak ada perubahan C lagi.
+Ulang terakhir `native-title-cli` **lulus, 6,01 detik, CTest exit 0**. Hasil
+akhir kedua suite terarah lulus; 17 suite lain tidak diulang karena perbaikan
+hanya menyentuh urutan gambar title dan fixture Python. Tidak ada satu run
+penuh baru yang diklaim 19/19 setelah koreksi ini.
+
+Tujuh capture title tambahan (nama, konfirmasi Yes/No, kalender musim/hari,
+konfirmasi ulang tahun, setup selesai) berhasil, masing-masing exit code 0.
+Tampilan diperiksa visual; handoff tetap
+`names=1/1/1 birthday=0/0 flags=00002000`. Bukti lokal:
+`build/native-validation/phase05-icons-windows-evidence.json`, riwayat diagnosis
+di `phase05-icons-failure-evidence.json`, dan capture
+`phase05-icons-{name,confirm-name,confirm-no,calendar,day,confirm-birthday,ready}.bmp/png`.
+Tidak ada kode C yang diubah setelah tes data asli lulus. Asset/capture tidak
+dikomit. Animasi/typing dialog dan perbandingan PS1 tetap belum lulus.
+
+## Baseline UI 77ee140 — tervalidasi Windows Debug
 
 - Bingkai bevel dan gradasi krem dipindahkan dari `src/ui/window_frame.c`;
   panel nama/kalender mengikuti koordinat source `name_entry*.c`.
@@ -38,8 +93,9 @@ yang diubah setelah laporan tes. Bukti lokal di
 Konfirmasi pengguna: logo yang terpotong pada screenshot adalah animasi turun
 yang sedang berlangsung, bukan bug logo. Gambar kedua memperlihatkan panel
 native sebelum perubahan UI ini. Uji desktop tersebut belum membuktikan
-kesetaraan dengan PS1. Cursor outline, panel konfirmasi/review, ikon musim,
-animasi/typing dialog serta timing masih menjadi sisa pekerjaan.
+kesetaraan dengan PS1. Pada baseline ini, cursor outline, panel konfirmasi/review,
+ikon musim, animasi/typing dialog dan timing masih menjadi sisa pekerjaan;
+lanjutan cursor/ikon/konfirmasi dijelaskan pada bagian terbaru di atas.
 
 ## Lanjutan setelah baseline
 
@@ -120,7 +176,8 @@ detik**. Empat suite title (`native-title`, `native-title-cli`,
 `native-title-tools`, `native-title-data`) semuanya lulus. Kelima belas suite
 sebelumnya ikut dijalankan dan lulus, termasuk runtime/input, archive, grafik
 dan audio. Hasil ini mencakup intro/fade, animasi, setup dan penyelarasan UI.
-Tidak ada kode C yang diubah setelah laporan tes tersebut.
+Hasil ini berlaku untuk `77ee140`; perubahan cursor/ikon dan konfirmasi
+setelahnya memerlukan hasil build/tes baru.
 
 | Kelompok | Suite lulus | Jalur |
 |---|---:|---|

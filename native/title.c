@@ -139,6 +139,26 @@ static bool exe_caption(SDL_IOStream *file, uint32_t address, uint16_t *out, uns
     return SDL_SetError("Title keyboard caption has no bounded END");
 }
 
+static bool setup_prompt(BtnArchive *archive, unsigned member, unsigned slot, uint16_t out[64])
+{
+    uint8_t header[4], bytes[128];
+    if (!btn_archive_read(archive,member,slot*8192,4,header,sizeof(header))
+        || btn_read_le32(header)!=UINT32_MAX
+        || !btn_archive_read(archive,member,slot*8192+6144,sizeof(bytes),bytes,sizeof(bytes)))
+        return SDL_SetError("Setup prompt requires a bounded text-only message slot");
+    /* These two retail prompts start with NO_SCROLL; the native UI displays
+     * their complete text. Opening/typing timing remains a separate gate. */
+    if (le16(bytes)!=0xFF3) return SDL_SetError("Setup prompt has no NO_SCROLL prefix");
+    for (unsigned i=0; i<63; ++i) {
+        uint16_t word=(uint16_t)le16(bytes+(i+1)*2);
+        out[i]=word;
+        if (word==0xFFFF) return true;
+        if (word>255 && word!=0xFFD && word!=0xFFFE)
+            return SDL_SetError("Unsupported setup prompt control");
+    }
+    return SDL_SetError("Setup prompt has no bounded END");
+}
+
 static bool read_sound(BtnArchive *archive, SDL_IOStream *exe, unsigned index,
     bool sequence, uint8_t **owned, size_t *size)
 {
@@ -220,9 +240,22 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
     if (ok) ok=exe_read(exe,UINT32_C(0x80049044)+3*2,tables,2);
     if (ok) { t->text_clut_y=le16(tables); ok=t->text_clut_y<BTN_VRAM_H; }
     if (ok) ok=exe_caption(exe,UINT32_C(0x800537B2),t->name_captions[0],128)
-        && exe_caption(exe,UINT32_C(0x80053888),t->name_captions[1],128);
+        && exe_caption(exe,UINT32_C(0x80053888),t->name_captions[1],128)
+        && exe_caption(exe,UINT32_C(0x8005175C),t->yes_no,16)
+        && exe_read(exe,UINT32_C(0x8005597C)+3*2,tables,2);
+    unsigned prompt_member=ok ? le16(tables) : 0;
     if (!SDL_CloseIO(exe)) return false;
     if (!ok) return SDL_SetError("Title sound/text tables or resources are incompatible");
+    if (!setup_prompt(archive,prompt_member,0x3A6,t->setup_prompts[0])
+        || !setup_prompt(archive,prompt_member,0x3A7,t->setup_prompts[1])) return false;
+    if (!btn_animation_read(archive,0,151552,&t->ui_animation_data,&t->ui_animation)) return false;
+    if (t->ui_animation.consumed!=5084 || t->ui_animation.ranges!=44
+        || le16(t->ui_animation.data+t->ui_animation.section[3]+11*4)<2
+        || le16(t->ui_animation.data+t->ui_animation.section[3]+43*4)<4)
+        return SDL_SetError("Shared UI animation differs from the audited layout");
+    BtnImageBank ui_images;
+    if (!btn_image_bank_read(archive,0,156636,&t->ui_image_data,&ui_images)
+        || !btn_image_bank_upload(t->assets,&ui_images,0,0,0,0,0)) return false;
     BtnImageBank font;
     if (!btn_image_bank_read(archive,0,0,&t->font_data,&font)
         || !btn_image_bank_upload(t->assets,&font,0,0,0,0,0)) return false;
@@ -238,6 +271,7 @@ void btn_title_close(BtnTitle *t)
     if (!t) return;
     free(t->animation_data); free(t->image_data); free(t->music_data);
     free(t->sequence_data); free(t->effects_data); free(t->font_data);
+    free(t->ui_animation_data); free(t->ui_image_data);
     free(t->list); free(t->assets); free(t->graphics);
     *t=(BtnTitle){0};
 }

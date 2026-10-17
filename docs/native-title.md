@@ -8,7 +8,11 @@ an overlay address to a host function pointer.
 The extension adds logo/copyright/Start entrance motion, fade transitions,
 scrolling scenery, randomized sprite actors and the full new-game setup order.
 The animation/setup and source-based window/text rendering pass all 19
-Windows Debug CTest suites (latest run: 22.89 seconds).
+Windows Debug CTest suites (baseline 77ee140: 22.89 seconds).
+The shared UI icons/confirmation passes the real-data suite (13.66 seconds)
+and synthetic CLI suite (6.01 seconds, exit 0) after a cursor ordering fix and
+fixture correction. The other 17 suites passed the initial full run; they were
+not repeated after the title drawing/fixture correction.
 A successful setup exposes a typed handoff;
 farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
 window/dialog appearance, trig quantization and audio parity are separate gates.
@@ -98,6 +102,9 @@ pixel/audio bytes into tracked source. Output must not already exist.
 | Menu/setup SFX | Bank 0; sound definitions 0, 1, 2 and 5 | Confirm/cancel/error/move; program/tone/note/fine/volume from executable |
 | English font | Member 0, offset 0; glyph page 14, CLUT (896,254) | Existing phase-03 font decoder and `name_entry*.c` |
 | Name layout | Executable row/column limits and symbol table | `name_cursor_move`, `name_key_cell_letters`, `name_key_char_symbols` |
+| Shared UI 0E/0D | Member 0, animation offset 151,552 (5,084 bytes); image bank offset 156,636 (16,152 bytes, 140 blocks) | All animation image rectangles match the selected bank, with no title/font VRAM overlap |
+| Hand cursor / seasons | UI range 11 frame 1 / range 43 frames 0..3 | `ui_icons.c`, `name_marker_draw`, `name_sound_draw`, `name_title_build_display` |
+| Name/birthday confirmation | Executable Yes/No at `0x8005175C`; message member from `menuWindowValues[3]`, slots `0x3A6`/`0x3A7`, text at +6,144 | `name_prompt_draw`, `menu_request_open`, `menu_load_result` |
 
 Runtime loaders validate member ranges, entry signatures, animation dimensions,
 image streams, executable table spans, VAB extents and sequence structure. They
@@ -160,9 +167,19 @@ table at `0x80049044`, matching `text_glyph_sprite`. The existing graphics text
 API retains its white default; setup explicitly supplies the dark palette.
 The semitransparent black backdrop follows `name_entry_step`/`name_sound_step`.
 
-Help text still describes the native keyboard controls. Selection outlines,
-confirmation/review layout, dialog opening/typing, season icons and exact
-PS1 raster/timing remain comparison/implementation gates. Reconstructing window
+The setup replaces selection outlines with the original hand sprite and
+draws all four season icons, including the selected season in the birthday header.
+Name/birthday confirmation reads bounded original prompts and Yes/No text,
+places the choice window at (145,76,40,30), and hides the keyboard/calendar
+as the source does. UI icons render above text, panels and the dimmed scene.
+Only text-only message slots with the expected NO_SCROLL prefix are accepted;
+unsupported controls, image-bearing slots and missing END fail visibly.
+
+Help text still describes the native keyboard controls. The handoff review,
+dialog opening/typing and exact PS1 raster/timing remain comparison/implementation
+gates. Reconstructing window
 commands from source is not a hardware reference capture. CLI tests independently
 decode both keyboard pages, check their glyph pixels/CLUT, frame edges/gradient,
-and reject unsupported or unterminated executable captions.
+and reject unsupported or unterminated executable captions. Added checks cover
+hand/season pixel decoding, both choice rows, confirmation prompts, hidden
+keyboard/calendar, malformed message slots and missing cursor frames.
