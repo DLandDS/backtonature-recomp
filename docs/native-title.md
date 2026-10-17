@@ -7,7 +7,7 @@ an overlay address to a host function pointer.
 
 The extension adds logo/copyright/Start entrance motion, fade transitions,
 scrolling scenery, randomized sprite actors and the full new-game setup order.
-The current dialog opening/closing and input-gating update passes all 19
+The baseline d9bc562 dialog opening/closing and input-gating update passes all 19
 Windows Debug CTest suites (60.02 seconds, CTest exit 0, user-reported).
 The build exit code was not reported separately. Seven additional headless
 captures passed and were visually inspected: opening, closing, name entry,
@@ -19,6 +19,10 @@ Earlier milestones remain recorded in `docs/phase05-progress.md`.
 A successful setup exposes a typed handoff;
 farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
 window/dialog appearance, trig quantization and audio parity are separate gates.
+The follow-up original setup question panels pass all four title suites
+(60.15 seconds, CTest exit 0). The other 15 suites were not repeated for this change.
+Video observations and the source/data mapping are recorded in
+[phase05-reference.md](phase05-reference.md).
 
 ## Run
 

@@ -35,6 +35,7 @@ typedef struct {
     BtnNameLayout name_layout;
     uint16_t name_captions[2][128];
     uint16_t yes_no[16], setup_prompts[2][64];
+    uint16_t setup_questions[4][16];
     unsigned text_clut_y;
     BtnTitleSetup setup;
     BtnTitleDialog dialog;

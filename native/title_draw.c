@@ -160,6 +160,12 @@ static bool review(BtnTitle *t)
 static bool setup_draw(BtnTitle *t)
 {
     BtnTitleSetup *s=&t->setup;
+    if (s->stage<BTN_SETUP_REVIEW) {
+        unsigned question=s->stage==BTN_SETUP_PLAYER ? 0u : s->stage==BTN_SETUP_FARM ? 2u
+            : s->stage==BTN_SETUP_DOG ? 3u : 1u;
+        /* GF_TITLE 800BA130: question window and text precede setup controls. */
+        if (!panel(t,16,16,120,20) || !draw_words(t,t->setup_questions[question],16,20,20)) return false;
+    }
     BtnRect box=t->dialog.box;
     if (t->dialog.visible && !panel(t,box.x,box.y,box.w,box.h)) return false;
     if (s->stage==BTN_SETUP_PLAYER || s->stage==BTN_SETUP_FARM || s->stage==BTN_SETUP_DOG)

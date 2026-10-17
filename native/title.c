@@ -244,6 +244,12 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
         && exe_caption(exe,UINT32_C(0x8005175C),t->yes_no,16)
         && exe_read(exe,UINT32_C(0x8005597C)+3*2,tables,2);
     unsigned prompt_member=ok ? le16(tables) : 0;
+    /* GF_TITLE 800BA130 indexes 800C4A50 relative to textBank (8005175C).
+     * Capacities come from the executable text-bank layout, including END. */
+    const uint32_t questions[4]={0x80051A94,0x80051AAA,0x80051AC8,0x80051AE0};
+    const unsigned question_words[4]={11,15,12,11};
+    for (unsigned i=0; ok && i<4; ++i)
+        ok=exe_caption(exe,questions[i],t->setup_questions[i],question_words[i]);
     if (!SDL_CloseIO(exe)) return false;
     if (!ok) return SDL_SetError("Title sound/text tables or resources are incompatible");
     if (!setup_prompt(archive,prompt_member,0x3A6,t->setup_prompts[0])

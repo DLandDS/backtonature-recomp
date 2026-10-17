@@ -44,6 +44,18 @@ def audit(directory):
     with bin_path.open('rb') as stream:
         overlay = MemberView(stream,spans[27]['offset'],spans[27]['span_bytes'])
         result = inspect_overlay(overlay.read(0,overlay.size),exe.word(0x80010098))
+        question_offsets = struct.unpack('<4I',overlay.read(0x800C4A50-0x800B7E20,16))
+        if question_offsets != (0x338,0x34E,0x36C,0x384):
+            raise ValueError('Title setup question table differs from audited input')
+        result['setup_questions'] = dict(draw_function='0x800BA130',offset_table='0x800C4A50',
+            box=[16,16,120,20],text_position=[20,20],entries=[])
+        for offset,capacity in zip(question_offsets,(11,15,12,11)):
+            text = exe.read(0x8005175C+offset,capacity*2)
+            words = struct.unpack('<'+'H'*capacity,text)
+            if words[-1]!=0xFFFF or any(w>255 and w!=0xFFD for w in words[:-1]):
+                raise ValueError('Title setup question requires bounded plain text and END')
+            result['setup_questions']['entries'].append(dict(address=f'0x{0x8005175C+offset:08X}',
+                capacity_words=capacity,sha256=hashlib.sha256(text).hexdigest()))
         member0 = MemberView(stream,spans[0]['offset'],spans[0]['span_bytes'])
         header = member0.read(8192,36)
         if struct.unpack_from('<I',header)[0] != 14:

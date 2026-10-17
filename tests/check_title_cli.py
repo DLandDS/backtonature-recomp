@@ -102,6 +102,8 @@ def fixture(folder):
         write(address,struct.pack('<7H',base,base+1,0xFFD,base+2,0xFFFE,base+3,0xFFFF))
     write(0x8005175C,struct.pack('<9H',0xFFD,0,1,2,0xFFFE,0xFFD,3,4,0xFFFF))
     write(0x8005597C+6,struct.pack('<H',5))
+    for index,address in enumerate((0x80051A94,0x80051AAA,0x80051AC8,0x80051AE0)):
+        write(address,struct.pack('<4H',index,0xFFD,index+4,0xFFFF))
     (folder/'SLUS_011.15').write_bytes(exe)
 
 
@@ -338,6 +340,15 @@ def check_name_pixels(folder, capture, shifted=False):
     assert pixel(274,100) == rgb(23 | (17<<5) | (8<<10))
     assert pixel(100,149) == rgb(23 | (17<<5) | (8<<10))
     assert pixel(272,79) != pixel(272,147), 'Window fill must retain its vertical gradient'
+    check_question_pixels(folder,capture,0)
+
+
+def check_question_pixels(folder, capture, question):
+    address,capacity = ((0x80051A94,11),(0x80051AAA,15),(0x80051AC8,12),(0x80051AE0,11))[question]
+    check_pixels(capture,text_pixels(folder,exe_words(folder,address,capacity),20,20))
+    raw = bmp(capture)
+    for x,y in ((50,16),(16,24)):
+        assert raw[(y*320+x)*3:(y*320+x+1)*3] == rgb(31 | (29<<5) | (26<<10)), 'Question frame missing'
 
 
 def setup_replay():
@@ -404,6 +415,7 @@ def check(executable, retail=None):
             script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
             capture = root/f'prompt-{frames}.bmp'
             run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
+            check_question_pixels(source,capture,0 if frames==112 else 1)
             if frames in (112,192):
                 offsets = struct.unpack('<33I',(source/'A_FILE.HDT').read_bytes())
                 member, = exe_words(source,0x8005597C+6,1)
@@ -430,6 +442,11 @@ def check(executable, retail=None):
                     expected.update(ui_pixels(source,43,0,253,35))
                 expected.update(ui_pixels(source,11,1,36,66 if frames==154 else 94))
                 check_pixels(capture,expected)
+        for frames,question in ((234,2),(308,3)):
+            script.write_bytes(b''.join(struct.pack('<II',*event) for event in events if event[0]<frames))
+            capture = root/f'question-{frames}.bmp'
+            run(executable,*common,'--frames',str(frames),'--input-script',script,'--output',capture)
+            check_question_pixels(source,capture,question)
         # Moving to No uses the second choice row without accepting the name.
         no_events = [event for event in events if event[0]<116]+[(116,2),(117,0)]
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in no_events))
@@ -462,6 +479,8 @@ def check(executable, retail=None):
             original = exe.read_bytes()
             for address,payload in ((0x80049044+6,struct.pack('<H',512)),
                                     (0x800537B2,struct.pack('<H',0x400A)),
+                                    (0x80051A94,struct.pack('<H',0x400A)),
+                                    (0x80051AAA,bytes(30)),
                                     (0x80053888,bytes(256))):
                 broken = bytearray(original)
                 offset = 2048+address-0x80010000

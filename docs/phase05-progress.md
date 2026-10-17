@@ -4,12 +4,37 @@ Diperbarui: 17 Oktober 2026 (Asia/Jakarta). Baseline: `5645d68`.
 
 ## Status
 
-**Berjalan. Intro/fade, animasi, setup, UI dan animasi dialog native
+**Berjalan. Baseline `d9bc562`: intro/fade, animasi, setup, UI dan animasi dialog native
 tervalidasi Windows Debug: 19/19 lulus, 0 gagal, 60,02 detik, CTest exit 0.
+Lanjutan panel pertanyaan lulus empat suite title: 60,15 detik, CTest exit 0.
 Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
 visual/timing/audio PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
 
-## Lanjutan animasi dialog — menunggu validasi
+## Acuan video dan panel pertanyaan — tervalidasi Windows Debug
+
+Video pengguna berhasil diperiksa melalui browser. Temuan bertimestamp dan
+batas buktinya tercatat di [phase05-reference.md](phase05-reference.md).
+Dialog wali kota/portrait, panel pertanyaan dan format header ulang tahun
+memiliki perbedaan yang terlihat terhadap baseline native. Audio dan timing
+per frame belum diperiksa; video tidak membuktikan hash/versi game atau input.
+
+Panel pertanyaan pemain/ulang tahun/farm/anjing kini ditulis memakai empat
+stream asli executable, window `(16,16,120,20)` dan teks `(20,20)` dari fungsi
+overlay `0x800BA130`. Loader memakai kapasitas masing-masing termasuk END.
+Audit sumber/data dan syntax Python lulus. Hasil terminal pengguna: **4/4 suite
+title lulus, 0 gagal, 60,15 detik, CTest exit 0**. Rincian: unit 0,03 detik,
+CLI sintetis 18,78, tools 0,22, data asli 41,12. Exit code build tidak dilaporkan
+terpisah. Lima belas suite lain tidak diulang; hasil 19/19 baseline tetap
+terpisah. Tidak ada perubahan kode C setelah hasil ini.
+
+Empat capture tambahan berhasil dan diperiksa visual, masing-masing exit 0:
+pemain 86 frame, ulang tahun 154, farm 234, anjing 308. Bukti lokal:
+`build/native-validation/phase05-questions-windows-evidence.json`,
+`phase05-questions-audit.json`, dan `phase05-questions-{player,birthday,farm,dog}.bmp/png`.
+Asset/capture tidak dikomit. Dialog wali kota/portrait/reveal teks, format
+header ulang tahun, review native dan pengukuran acuan PS1 masih terbuka.
+
+## Lanjutan animasi dialog — tervalidasi Windows Debug
 
 - Controller memakai geometri bilangan bulat `menu_box_animate`: parameter
   durasi 12 untuk buka, 6 untuk tutup, enam langkah lebar dan skip frame dengan
