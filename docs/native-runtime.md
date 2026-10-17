@@ -74,6 +74,8 @@ disconnect. Physical device mappings depend on SDL's gamepad database.
 No data directory is needed for synthetic testing. If `--data-dir PATH` is
 specified, both `A_FILE.HDT` and `A_FILE.BIN` must be nonempty regular files.
 This checks paths only; archive validation belongs to the resource reader.
+The separate [archive CLI](native-archive.md) validates HDT/BIN spans and dumps
+member ranges without starting the runtime window.
 Never overwrite those files. The save directory defaults to SDL's per-user
 preference directory. It is created, but no game save is written. Volume is
 validated and logged; audio playback is unavailable and no audio device opens.
