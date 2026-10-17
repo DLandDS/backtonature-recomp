@@ -30,7 +30,7 @@ def inspect_overlay(data, base):
     return dict(member=27,span_bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),
                 load_address=f'0x{base:08X}',entry_address='0x800B7EEC',entry_offset=entry,
                 dispatch_table_address='0x800C49F8',handlers=[f'0x{p:08X}' for p in handlers],
-                native_scope='Start/menu branch only; intro, attract mode, scenery and name entry incomplete')
+                native_scope='Native intro/scenery, Start/menu and new-game setup; gameplay/attract scene and PS1 parity are separate gates')
 
 
 def audit(directory):
@@ -60,8 +60,13 @@ def audit(directory):
                                 validation=bank['validation'])
     if exe.read(0x80049296+26*2,2) != bytes([53,54]):
         raise ValueError('Title sound request 26 does not select bank 53 / sequence 54')
-    result['sound'] = dict(request=26,bank=53,sequence=54,effects_bank=0,effects_ids=[0,5],
+    result['sound'] = dict(request=26,bank=53,sequence=54,effects_bank=0,effects_ids=[0,1,2,5],
                           pairing_evidence='Overlay 800BA4C4 calls sound_request(26); sound_request.c maps its pair table')
+    result['name_entry'] = dict(max_glyphs=8,seasons=4,days_per_season=30,
+                               order=['player','birthday','farm','dog','confirmation'],
+                               sources=['src/ui/name_entry.c','src/ui/name_entry_2.c'],
+                               symbol_table='0x800559D4',row_limits=['0x8005E364','0x8005E36C'],
+                               column_limits=['0x8005599C','0x800559AC'])
     result['inputs'] = [file_identity(directory/name) for name in ('A_FILE.HDT','A_FILE.BIN','SLUS_011.15')]
     result['validation'] = 'Static source/data audit only; native compilation, tests and PS1 parity are separate gates'
     return result

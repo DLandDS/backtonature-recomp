@@ -31,6 +31,7 @@ typedef struct {
     uint32_t pixels[BTN_WIDTH * BTN_HEIGHT];
     BtnTitle title;
     SDL_AudioStream *audio;
+    bool handoff_reported;
 } App;
 
 static void usage(void)
@@ -41,8 +42,8 @@ static void usage(void)
         "  [--data-dir PATH] [--save-dir PATH] [--volume 0..100]\n"
         "  [--bind up|down|left|right|a|b|start=SDL_SCANCODE_NAME]\n"
         "Defaults: arrows, Z, X, Return. Escape exits; F11 toggles fullscreen.\n"
-        "Runtime test: synthetic 60 Hz. Title: partial native 30 Hz menu with original assets/music.\n"
-        "Title intro/scenery, new-game setup, gameplay and save/load are unavailable.\n"
+        "Runtime test: synthetic 60 Hz. Title: native 30 Hz title/setup with original assets/music.\n"
+        "Gameplay/save-load and PS1 parity are unavailable; setup provides a typed native handoff.\n"
         "Title: Return opens menu, up/down selects, Z/Return confirms, X returns.\n"
         "Replay: headless-only LE32 tick/mask pairs, strictly increasing ticks from zero.");
 }
@@ -254,15 +255,15 @@ static bool present(App *app)
             || !SDL_SetRenderDrawColor(app->renderer,0,0,0,255) || !SDL_RenderClear(app->renderer)
             || !SDL_RenderTexture(app->renderer,app->texture,NULL,NULL)
             || !SDL_SetRenderDrawColor(app->renderer,255,255,255,255)
-            || !SDL_RenderDebugText(app->renderer,4,4,"NATIVE TITLE PREVIEW / 30 Hz")) return false;
+            || !SDL_RenderDebugText(app->renderer,4,4,"NATIVE TITLE / PS1 check pending")) return false;
         if (app->title.state.page==BTN_TITLE_UNAVAILABLE) {
             if (!SDL_SetRenderDrawColor(app->renderer,0,0,0,255)
                 || !SDL_RenderFillRect(app->renderer,&(SDL_FRect){0,184,320,56})
                 || !SDL_SetRenderDrawColor(app->renderer,255,255,255,255)
-                || !SDL_RenderDebugText(app->renderer,4,188,app->title.state.selection
-                    ? "Continue unavailable\nSave/load requires phase 07\nX/Return: back"
-                    : "New Game unavailable\nName entry/gameplay pending\nX/Return: back")) return false;
-        } else if (!SDL_RenderDebugText(app->renderer,4,224,"Intro/scenery pending | X: back")) return false;
+                || !SDL_RenderDebugText(app->renderer,4,188,
+                    "Continue unavailable\nSave/load requires phase 07\nX/Return: back")) return false;
+        } else if (app->title.state.page!=BTN_TITLE_SETUP && app->title.state.page!=BTN_TITLE_READY
+            && !SDL_RenderDebugText(app->renderer,4,224,"Enter: Start  Z: choose  X: back")) return false;
         return SDL_RenderPresent(app->renderer);
     }
     for (int y = 0; y < BTN_HEIGHT; ++y)
@@ -284,6 +285,13 @@ static bool present(App *app)
 }
 
 #ifndef BTN_SDL_TEST
+static unsigned name_length(const uint16_t name[9])
+{
+    unsigned length=0;
+    while (length<8 && name[length]!=0xFFFF) ++length;
+    return length;
+}
+
 static bool replay_load(const char *path, uint8_t **data, size_t *size, unsigned frames)
 {
     if (!path) return true;
@@ -355,7 +363,7 @@ int main(int argc, char **argv)
         SDL_free(hdt); SDL_free(bin);
         if (!opened || !btn_title_open(&app.title,&archive,options.data_dir)) goto cleanup;
         SDL_Log("Title preview: CPU-native Start/menu branch; %s",btn_title_notice(&app.title.state));
-        SDL_Log("Unsupported: intro/scenery motion, attract mode, name entry, gameplay, save/load; audio is approximate dry playback.");
+        SDL_Log("Native intro/scenery and setup; unsupported: attract gameplay, farm gameplay, save/load and PS1 parity. Audio is approximate dry playback.");
         if (!options.headless) {
             SDL_AudioSpec spec={SDL_AUDIO_S16,2,BTN_AUDIO_RATE};
             app.audio=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
@@ -397,10 +405,23 @@ int main(int argc, char **argv)
             }
             if (options.title) {
                 BtnTitlePage before=app.title.state.page; unsigned choice=app.title.state.selection;
+                BtnSetupStage setup_before=app.title.setup.stage;
+                bool confirmed=app.title.setup.confirming;
                 if (!btn_title_tick(&app.title,&app.input)) goto cleanup;
                 if (before!=app.title.state.page || choice!=app.title.state.selection)
                     SDL_Log("title: tick=%u page=%u selection=%u %s",app.title.state.ticks-1,
                         (unsigned)app.title.state.page,app.title.state.selection,btn_title_notice(&app.title.state));
+                if (setup_before!=app.title.setup.stage || confirmed!=app.title.setup.confirming)
+                    SDL_Log("title setup: tick=%u stage=%u length=%u confirming=%u",app.title.state.ticks-1,
+                        (unsigned)app.title.setup.stage,app.title.setup.length,(unsigned)app.title.setup.confirming);
+                const BtnNewGame *ready=btn_title_new_game(&app.title);
+                if (!ready) app.handoff_reported=false;
+                else if (!app.handoff_reported) {
+                    SDL_Log("title handoff: names=%u/%u/%u birthday=%u/%u flags=%08x",name_length(ready->player),
+                        name_length(ready->farm),name_length(ready->dog),(unsigned)ready->season,(unsigned)ready->day,
+                        (unsigned)ready->flags);
+                    app.handoff_reported=true;
+                }
             } else btn_simulate(&app.simulation, &app.input);
             btn_input_end_tick(&app.input);
         }

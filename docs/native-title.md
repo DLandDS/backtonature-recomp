@@ -1,13 +1,15 @@
 # Native title preview (phase 05, incomplete)
 
-`btn-native --title` compiles a reconstruction of the Start/menu branch as host
-C. It reads selected image, animation and sound resources through the existing
+`btn-native --title` compiles the title/menu and new-game setup as host C.
+It reads selected image, animation, font and sound resources through the existing
 native libraries. It never executes MIPS bytes, invokes PS1 BIOS/CRT0, or casts
 an overlay address to a host function pointer.
 
-This is a partial title preview. Intro screens, randomized animated scenery,
-attract mode, fade transitions and the new-game name-entry flow remain unported.
-It does not yet satisfy phase 05 acceptance or lead to playable gameplay.
+The extension adds logo/copyright/Start entrance motion, fade transitions,
+scrolling scenery, randomized sprite actors and the full new-game setup order.
+Its Windows Debug validation passes all 19 CTest suites. A successful setup exposes a typed handoff;
+farm gameplay, attract gameplay and save/load remain unavailable. PS1 timing,
+window/dialog appearance, trig quantization and audio parity are separate gates.
 
 ## Run
 
@@ -21,20 +23,44 @@ The directory must contain the audited US `A_FILE.HDT`, `A_FILE.BIN`, and
 `SLUS_011.15`. No extracted audio directory or PSY-Q installation is needed.
 No game files are included in Git. `--runtime-test` retains its synthetic mode.
 
-Return opens the menu. Up/down selects New Game (0) or Continue (1); the initial
-selection is Continue, matching the overlay reset. Z/Return confirms. An
-unsupported destination shows a visible explanation: new-game setup/gameplay
-is pending; Continue requires phase 07. X/Return dismisses that explanation.
+Z/Return skips the entrance animation after its initial fade. Return on the
+Start prompt opens the menu. Up/down selects New Game (0) or Continue (1); the
+initial selection is Continue, matching the overlay reset. Z/Return confirms.
+Continue explains that save/load requires phase 07; X/Return dismisses it.
 X on the menu returns to Start. This back control is a native preview addition,
 not a reconstructed cancel branch from the original two-choice menu.
+
+New Game follows the audited order: player name, birthday, farm name, dog name,
+then a final review. Use arrows to move the original 14-column naming cursor,
+Z to choose a glyph, Shift cell to switch character sets, Space cell for spaces,
+X to delete, and Enter/End cell to request confirmation. Names contain at most
+eight glyphs and a bounded END marker. An empty or initially all-space name
+cannot be confirmed. Yes accepts; No or X returns to editing. The initial
+player-name screen cannot be cancelled with an empty name, matching source.
+
+Birthday selection uses four seasons and the original 30-day calendar wrapping.
+X returns from day to season, or season to player naming. Empty-name cancel on
+farm/dog naming follows the preceding setup step. Final review Yes produces
+`BtnNewGame`: three glyph names, zero-based birthday, four deterministic seed
+words and the new-game flag. `btn_title_new_game()` exposes it only once the
+transition completes. The screen states that gameplay requires phase 06;
+X returns to a reset title and restarts its music. No successful farm scene is
+substituted. An idle title's 1800-tick attract request likewise shows the
+gameplay boundary instead of pretending to play a demo.
 
 The existing `--bind`, gamepad, focus/minimize, fullscreen, presentation FPS
 and volume controls apply. Native actions A/B are Z/X by default. Start alone
 opens the prompt; A/Start confirms a menu selection. Directions toggle once
 per pressed edge, with precedence over confirm, following `800B86D0`; holding
 a direction does not repeat. PS1 Select is not mapped by the current runtime.
-The Start/menu pixels use the original logo, text sprites, copyright and cursor;
-the flat blue background explicitly substitutes for unported scenery.
+The title uses the original logo, text sprites, copyright, cursor, background
+and actor assets. Animation cursors advance once per simulated draw call,
+including repeated actors that share one source cursor. Presentation renders
+cached frames and cannot advance animation or RNG. The host LCG follows
+`rand_range`; the initial seed and naming layout tables come from the executable.
+Setup text uses the original English glyph atlas. Its native panels, shortened
+prompts and transition scheduling are functional adaptations; the retail
+dialog/window renderer is not ported in full and visual parity is not claimed.
 
 The simulation uses nominal 30 Hz, inferred from `main_run_frame`'s `VSync(2)`.
 It is independent of `--fps`. NTSC fractional timing and PS1 input/capture parity
@@ -67,7 +93,9 @@ pixel/audio bytes into tracked source. Output must not already exist.
 | Images/CLUTs | Member 0, offset 11,548; 139,888 bytes; 73 blocks | Same loader decodes the 0D at read buffer +3,356 |
 | Static ranges | 31 logo, 32 copyright, 33 Start, 34 New Game, 35 Continue, 36 cursor | Draw helpers `800B9368` through `800BA118`; independently inspected pixels |
 | Title music | Member 9, bank 53 + sequence 54 | `800BA4C4` requests 26; `sound_request.c` indexes executable pair table |
-| Menu SFX | Bank 0; sound definitions 0 and 5 | Menu branch requests those IDs; program/tone/note/fine/volume from executable |
+| Menu/setup SFX | Bank 0; sound definitions 0, 1, 2 and 5 | Confirm/cancel/error/move; program/tone/note/fine/volume from executable |
+| English font | Member 0, offset 0; glyph page 14, CLUT (896,254) | Existing phase-03 font decoder and `name_entry*.c` |
+| Name layout | Executable row/column limits and symbol table | `name_cursor_move`, `name_key_cell_letters`, `name_key_char_symbols` |
 
 Runtime loaders validate member ranges, entry signatures, animation dimensions,
 image streams, executable table spans, VAB extents and sequence structure. They
@@ -79,10 +107,12 @@ All serialized pointers remain LE32 addresses/offsets, never host pointers.
 
 CTest adds `native-title`, `native-title-cli`, `native-title-tools` and, when
 `BTN_NATIVE_DATA_DIR` is configured, `native-title-data`. State tests cover
-press/hold/precedence, unsupported destinations, return/reset, pause and the
-nominal 30 Hz clock at 30/60/144 FPS. CLI tests generate synthetic HDT/BIN/EXE,
+press/hold/precedence, intro/fade, grid bounds/repeat, eight-glyph names,
+calendar/cancel/confirmation, handoff, reset, pause and the nominal 30 Hz clock
+at 30/60/144 FPS. CLI tests generate synthetic HDT/BIN/EXE,
 exercise SDL dummy video/audio, reject malformed replay/input tables and compare
-captured sprite pixels with an independent Python decoder. Optional real-data
+captured animated scenery/title pixels with an independent Python decoder.
+They replay the complete setup and verify its final state. Optional real-data
 tests repeat the same supported path against local resources. Existing runtime
 and audio suites must also run because their shared code is used here.
 
@@ -105,10 +135,13 @@ B=32, Start=64. A held mask is not another press. For example:
 ```python
 import struct
 from pathlib import Path
-events = [(0, 64), (1, 0), (2, 1), (3, 0), (4, 16), (5, 0), (6, 32)]
+events = [(0, 0), (10, 64), (11, 0), (32, 64), (33, 0),
+          (34, 1), (35, 0), (36, 16), (37, 0), (58, 16), (59, 0)]
 Path('build/title.input').write_bytes(b''.join(struct.pack('<II', *event) for event in events))
 ```
 
-This opens the menu, selects New Game, shows its unavailable state, and returns
-to the menu. Matching PS1 captures and input sequences are still required for
-phase acceptance. See [phase05-progress.md](phase05-progress.md).
+For the new entrance/fade sequence, use a replay beginning with `(0,0)`, skip
+with `(10,64)`, release at `(11,0)`, and open the menu at `(32,64)` followed by
+`(33,0)`. The complete generated setup replay is in `tests/check_title_cli.py`.
+Matching PS1 captures and input sequences are still required for phase
+acceptance. See [phase05-progress.md](phase05-progress.md).

@@ -5,14 +5,74 @@
 
 static unsigned le16(const uint8_t *p) { return (unsigned)p[0] | ((unsigned)p[1]<<8); }
 
+static void reset_actors(BtnTitle *t)
+{
+    const unsigned ranges[6]={0,10,19,22,24,26};
+    unsigned slot=0;
+    for (unsigned i=0; i<6; ++i) {
+        t->actors[i]=(BtnAnimationCursor){0}; t->actors[i].range=ranges[i]; t->actor_ticks[i]=0;
+        unsigned copies=i<3 ? 1u : i==3 ? 3u : i==4 ? 5u : 3u;
+        for (unsigned n=0; n<copies; ++n) t->actor_frames[slot++]=t->actors[i];
+    }
+    t->background[0]=t->background[1]=t->background_frame[0]=t->background_frame[1]=0;
+}
+
 void btn_title_reset(BtnTitleState *s)
 {
-    *s=(BtnTitleState){BTN_TITLE_PROMPT,1,0,0};
+    *s=(BtnTitleState){0}; s->page=BTN_TITLE_INTRO; s->selection=1;
+    s->fade_mode=1; s->fade_level=9; s->fade_length=10;
+    s->logo_y=-160; s->copyright_y=48; s->start_x=320;
+}
+
+static void transition(BtnTitleState *s, BtnTitlePage target)
+{
+    s->target=target; s->pending=true;
+    s->fade_mode=2; s->fade_level=0; s->fade_length=11;
 }
 
 int btn_title_step(BtnTitleState *s, const BtnInput *input)
 {
     ++s->ticks; ++s->page_ticks;
+    /* screen_fade_frame runs before scene dispatch. Fade-in starts at n-1;
+     * fade-out settles at (n+1)+1, matching screen_fade.c mode 1/2. */
+    if (s->fade_mode==1 && s->fade_level) --s->fade_level;
+    else if (s->fade_mode==2 && s->fade_level<s->fade_length+1) ++s->fade_level;
+    if (s->pending) {
+        if (s->fade_level>=s->fade_length+1) {
+            s->page=s->target; s->page_ticks=0; s->pending=false;
+            s->fade_mode=1; s->fade_level=9; s->fade_length=10;
+        }
+        return -1;
+    }
+    if (s->fade_mode==1 && s->fade_level) return -1;
+    if (s->page==BTN_TITLE_READY) {
+        if (input->pressed & BTN_BIT(BTN_B)) btn_title_reset(s);
+        return -1;
+    }
+    if (s->page==BTN_TITLE_SETUP) return -1;
+    if (s->page==BTN_TITLE_INTRO) {
+        if (input->pressed & (BTN_BIT(BTN_A)|BTN_BIT(BTN_START))) {
+            transition(s,BTN_TITLE_PROMPT); return 0;
+        }
+        /* Audited 800B8E5C..800B9120: wait, logo -160..0, copyright
+         * +48..0, Start +320..0, blink 90 ticks, slide left, repeat Start. */
+        ++s->intro_ticks;
+        switch (s->intro_stage) {
+        case 0: if (s->intro_ticks>=30) { s->intro_stage=1; s->intro_ticks=0; } break;
+        case 1: if (++s->logo_y>=0) s->intro_stage=2; break;
+        case 2: if (--s->copyright_y<=0) s->intro_stage=3; break;
+        case 3: if ((s->start_x-=2)<=0) { s->intro_stage=4; s->intro_ticks=0; } break;
+        case 4: if (s->intro_ticks>=90) s->intro_stage=5; break;
+        case 5: if ((s->start_x-=2)<=-160) { s->intro_stage=3; s->start_x=320; } break;
+        default: break;
+        }
+        if (s->page_ticks>=1800) transition(s,BTN_TITLE_ATTRACT);
+        return -1;
+    }
+    if (s->page==BTN_TITLE_ATTRACT) {
+        if (input->pressed & (BTN_BIT(BTN_B)|BTN_BIT(BTN_START))) transition(s,BTN_TITLE_PROMPT);
+        return -1;
+    }
     if (s->page==BTN_TITLE_UNAVAILABLE) {
         if (input->pressed & (BTN_BIT(BTN_B)|BTN_BIT(BTN_START))) {
             s->page=BTN_TITLE_MENU; s->page_ticks=0;
@@ -24,6 +84,7 @@ int btn_title_step(BtnTitleState *s, const BtnInput *input)
         if (input->pressed & BTN_BIT(BTN_START)) {
             s->page=BTN_TITLE_MENU; s->selection=1; s->page_ticks=0; return 0;
         }
+        if (s->page_ticks>=1800) transition(s,BTN_TITLE_ATTRACT);
         return -1;
     }
     /* 800B86D0: up/down/select toggle once per pressed edge, before confirm.
@@ -31,18 +92,20 @@ int btn_title_step(BtnTitleState *s, const BtnInput *input)
     if (input->pressed & BTN_BIT(BTN_B)) { s->page=BTN_TITLE_PROMPT; s->page_ticks=0; return -1; }
     if (input->pressed & (BTN_BIT(BTN_UP)|BTN_BIT(BTN_DOWN))) { s->selection^=1; return 5; }
     if (input->pressed & (BTN_BIT(BTN_A)|BTN_BIT(BTN_START))) {
-        s->page=BTN_TITLE_UNAVAILABLE; s->page_ticks=0; return 0;
+        if (!s->selection) transition(s,BTN_TITLE_SETUP);
+        else { s->page=BTN_TITLE_UNAVAILABLE; s->page_ticks=0; }
+        return 0;
     }
-    /* The retail idle branch enters attract mode after 1800 ticks. Its assets
-     * and random scene variants are not ported; do not pretend to run a demo. */
     return -1;
 }
 
 const char *btn_title_notice(const BtnTitleState *s)
 {
-    if (s->page!=BTN_TITLE_UNAVAILABLE) return "PARTIAL TITLE / intro and scenery pending";
-    return s->selection ? "Continue unavailable: save/load requires phase 07"
-        : "New Game unavailable: name entry/gameplay pending";
+    if (s->page==BTN_TITLE_UNAVAILABLE) return "Continue unavailable: save/load requires phase 07";
+    if (s->page==BTN_TITLE_ATTRACT) return "Attract demo requires gameplay / phase 06";
+    if (s->page==BTN_TITLE_READY) return "New Game setup ready; gameplay requires phase 06";
+    if (s->page==BTN_TITLE_SETUP) return "New Game setup: player, birthday, farm, dog";
+    return "Native title / PS1 comparison pending";
 }
 
 /* Read fixed US table addresses as bounded file offsets, never host pointers.
@@ -122,17 +185,33 @@ bool btn_title_open(BtnTitle *t, BtnArchive *archive, const char *directory)
         && btn_sequence_open(&t->sequence,t->sequence_data,size,true)
         && read_sound(archive,exe,0,false,&t->effects_data,&size)
         && btn_audio_bank_open(&t->effects_bank,t->effects_data,size);
-    for (unsigned i=0; ok && i<2; ++i) {
-        ok=exe_read(exe,UINT32_C(0x800495CC)+(i ? 5u : 0u)*14,tables,14);
+    for (unsigned i=0; ok && i<6; ++i) {
+        ok=exe_read(exe,UINT32_C(0x800495CC)+i*14,tables,14);
         for (unsigned n=0; ok && n<7; ++n) t->effect_definitions[i][n]=(uint16_t)le16(tables+n*2);
         if (ok && (t->effect_definitions[i][0]!=0 || t->effect_definitions[i][2]>127
             || t->effect_definitions[i][4]>127 || t->effect_definitions[i][5]>127
             || t->effect_definitions[i][6]>127)) ok=false;
     }
+    if (ok) ok=exe_read(exe,UINT32_C(0x8005E364),t->name_layout.row_last[0],6)
+        && exe_read(exe,UINT32_C(0x8005E36C),t->name_layout.row_last[1],6)
+        && exe_read(exe,UINT32_C(0x8005599C),t->name_layout.column_last[0],14)
+        && exe_read(exe,UINT32_C(0x800559AC),t->name_layout.column_last[1],14);
+    for (unsigned i=0; ok && i<28; ++i) {
+        ok=exe_read(exe,UINT32_C(0x800559D4)+i*2,tables,2);
+        if (ok) t->name_layout.symbols[i]=(uint16_t)le16(tables);
+    }
+    if (ok) ok=btn_name_layout_valid(&t->name_layout)
+        && exe_read(exe,UINT32_C(0x8005E290),tables,4);
+    if (ok) t->random=btn_read_le32(tables);
     if (!SDL_CloseIO(exe)) return false;
     if (!ok) return SDL_SetError("Title sound tables or resources are incompatible");
+    BtnImageBank font;
+    if (!btn_image_bank_read(archive,0,0,&t->font_data,&font)
+        || !btn_image_bank_upload(t->assets,&font,0,0,0,0,0)) return false;
     btn_audio_init(&t->music); btn_audio_init(&t->effects);
     btn_title_reset(&t->state);
+    btn_setup_reset(&t->setup);
+    reset_actors(t);
     return true;
 }
 
@@ -140,47 +219,77 @@ void btn_title_close(BtnTitle *t)
 {
     if (!t) return;
     free(t->animation_data); free(t->image_data); free(t->music_data);
-    free(t->sequence_data); free(t->effects_data);
+    free(t->sequence_data); free(t->effects_data); free(t->font_data);
     free(t->list); free(t->assets); free(t->graphics);
     *t=(BtnTitle){0};
 }
 
-bool btn_title_tick(BtnTitle *t, const BtnInput *input)
+static unsigned random_range(BtnTitle *t, unsigned range)
 {
-    int sound=btn_title_step(&t->state,input);
-    if (sound>=0) {
-        const uint16_t *d=t->effect_definitions[sound==5 ? 1 : 0];
-        if (!btn_audio_tone_on(&t->effects,&t->effects_bank,d[2],d[3],d[4],d[5],d[6])) return false;
+    t->random=t->random*UINT32_C(0x41C64E6D)+UINT32_C(0x3039);
+    return ((t->random>>16)*(range&65535u))>>16;
+}
+
+static bool animate(BtnTitle *t)
+{
+    const unsigned delays[6]={90,60,60,15,20,30};
+    unsigned slot=0;
+    for (unsigned i=0; i<6; ++i) {
+        unsigned copies=i<3 ? 1u : i==3 ? 3u : i==4 ? 5u : 3u;
+        for (unsigned n=0; n<copies; ++n) {
+            t->actor_frames[slot++]=t->actors[i];
+            if (!btn_animation_tick(&t->animation,&t->actors[i])) return false;
+        }
+        if (++t->actor_ticks[i]>=delays[i]) {
+            t->actor_ticks[i]=0;
+            unsigned range;
+            if (i<2) {
+                int candidate=(int)random_range(t,i ? 9 : 10)+(i ? 10 : 0);
+                if (!(candidate&1)) --candidate;
+                int minimum=i ? 10 : 0;
+                range=(unsigned)(candidate<minimum ? minimum : candidate);
+            } else if (i==2) {
+                range=19+random_range(t,3);
+                if (range==19) t->actor_ticks[i]=30;
+            } else range=22+(i-3)*2+random_range(t,2);
+            t->actors[i]=(BtnAnimationCursor){0}; t->actors[i].range=range;
+        }
     }
+    t->background_frame[0]=t->background[0]; t->background_frame[1]=t->background[1];
+    if (t->state.ticks && ((t->state.ticks-1)&1u)) t->background[0]=(t->background[0]+1)%960;
+    t->background[1]=(t->background[1]+1)%960;
     return true;
 }
 
-static bool sprite(BtnTitle *t, unsigned range, int x, int y)
+const BtnNewGame *btn_title_new_game(const BtnTitle *t)
 {
-    BtnAnimationCursor cursor={0}; cursor.range=range;
-    return btn_animation_draw(&t->animation,&cursor,t->list,0,x,y);
+    return t && t->state.page==BTN_TITLE_READY && !t->state.pending
+        && !t->state.fade_level && t->setup.stage==BTN_SETUP_DONE ? &t->setup.game : NULL;
 }
 
-bool btn_title_draw(BtnTitle *t, uint32_t *pixels, size_t count)
+bool btn_title_tick(BtnTitle *t, const BtnInput *input)
 {
-    if (!t || !t->assets || !pixels || count<BTN_WIDTH*BTN_HEIGHT)
-        return SDL_SetError("Title is not loaded or framebuffer is too small");
-    *t->graphics=*t->assets;
-    BtnPrimitive back={0}; back.type=BTN_RECTANGLE; back.w=BTN_WIDTH; back.h=BTN_HEIGHT;
-    back.v[0]=(BtnVertex){0,0,0,0,112,176,232};
-    if (!btn_draw(t->graphics,&back)) return false;
-    btn_draw_list_clear(t->list);
-    if (t->state.page==BTN_TITLE_PROMPT) {
-        if (!sprite(t,33,0,0)) return false;
-    } else {
-        unsigned x=t->state.ticks%30<15 ? 100u : 104u;
-        if (!sprite(t,36,(int)x,t->state.selection ? 179 : 155)
-            || !sprite(t,35,0,0) || !sprite(t,34,0,0)) return false;
+    BtnTitlePage before=t->state.page;
+    (void)random_range(t,65535); /* main_run_frame consumes one random draw. */
+    int sound=btn_title_step(&t->state,input);
+    if (before==BTN_TITLE_READY && t->state.page==BTN_TITLE_INTRO) {
+        reset_actors(t); btn_setup_reset(&t->setup); btn_audio_init(&t->music); btn_audio_stop(&t->effects);
+        if (!btn_sequence_open(&t->sequence,t->sequence_data,t->sequence.size,true)) return false;
     }
-    /* Descending OT/head insertion: queue foreground before logo/copyright. */
-    return sprite(t,32,0,0) && sprite(t,31,0,0)
-        && btn_draw_list_render(t->graphics,t->list)
-        && btn_framebuffer(t->graphics,(BtnRect){0,0,BTN_WIDTH,BTN_HEIGHT},pixels,count);
+    if (before!=BTN_TITLE_SETUP && t->state.page==BTN_TITLE_SETUP) btn_setup_reset(&t->setup);
+    else if (t->state.page==BTN_TITLE_SETUP && !t->state.pending && !t->state.fade_level) {
+        sound=btn_setup_step(&t->setup,&t->name_layout,input);
+        if (t->setup.stage==BTN_SETUP_DONE) {
+            for (unsigned i=0; i<4; ++i) t->setup.game.seeds[i]=(uint16_t)random_range(t,65535);
+            if (!btn_audio_volume(&t->music,1,BTN_AUDIO_RATE*10/BTN_TITLE_HZ)) return false;
+            transition(&t->state,BTN_TITLE_READY);
+        }
+    }
+    if (sound>=0 && sound<6) {
+        const uint16_t *d=t->effect_definitions[sound];
+        if (!btn_audio_tone_on(&t->effects,&t->effects_bank,d[2],d[3],d[4],d[5],d[6])) return false;
+    }
+    return animate(t);
 }
 
 bool btn_title_audio(BtnTitle *t, int16_t *stereo, size_t frames)

@@ -4,6 +4,7 @@ Synthetic inputs ship as generators. Optional retail bytes/captures stay local.
 The pixel oracle checks the supported static title layers, not PS1 parity.
 """
 import os
+import math
 from pathlib import Path
 import struct
 import subprocess
@@ -33,7 +34,10 @@ def fixture(folder):
         struct.pack_into('<2H', animation, 68+i*4, 1, 0)
     struct.pack_into('<H2h4B', animation, 3346, 0, 0, 0, 1, 255, 0, 0)
     images = image_fixture()
-    member0 = b'\0'*8192 + animation + images
+    palette = struct.pack('<I4H16H', (6<<24)|32, 896,254,16,1,*([0]+[32767]*15))
+    glyph_pixels = bytes([0x11])*(32*120*2)
+    glyph_bank = b'\x0d\0\x02\0'+palette+struct.pack('<I4H',(4<<24)|len(glyph_pixels),896,0,32,120)+glyph_pixels
+    member0 = glyph_bank+b'\0'*(8192-len(glyph_bank)) + animation + images
     bank = bytes(audio_fixture())
     seq = b'pQES\0\0\0\1\x01\xe0\x07\xa1\x20\x04\x02' + bytes([
         0, 0xC0, 0, 0, 0x90, 60, 127, 0x83, 0x60, 60, 0, 0, 0xFF, 0x2F, 0])
@@ -47,7 +51,7 @@ def fixture(folder):
         offsets.append(offsets[-1]+len(member))
     (folder/'A_FILE.HDT').write_bytes(struct.pack('<33I', *offsets))
     (folder/'A_FILE.BIN').write_bytes(b''.join(members))
-    exe = bytearray(0x3B800)
+    exe = bytearray(0x50000)
     exe[:8] = b'PS-X EXE'
     struct.pack_into('<II', exe, 24, 0x80010000, len(exe)-2048)
 
@@ -59,8 +63,13 @@ def fixture(folder):
     write(0x80049370, struct.pack('<3I', 0, 0xC20, len(bank)))
     write(0x80049370+53*8, struct.pack('<5I', len(bank), len(bank)+0xC20,
                                     len(bank)*2, 1, len(bank)*2+len(seq)))
-    for sound in (0, 5):
+    for sound in range(6):
         write(0x800495CC+sound*14, struct.pack('<7H', 0,0,0,0,60,0,127))
+    write(0x8005E364,bytes([13,13,12,10,9,13]))
+    write(0x8005E36C,bytes([13,13,7,0,0,13]))
+    write(0x8005599C,bytes([5,4,4,4,4,5,4,4,4,4,3,2,2,5]))
+    write(0x800559AC,bytes([2,2,2,2,2,2,2,2,1,1,0,0,0,5]))
+    write(0x800559D4,struct.pack('<28H',*range(0x60,0x60+28)))
     (folder/'SLUS_011.15').write_bytes(exe)
 
 
@@ -84,21 +93,100 @@ def bmp(path):
     return bytes(result)
 
 
-def reference(folder, *, menu=False, tick=1, selection=1):
+def reference(folder, *, menu=False, tick=1, selection=1, intro=False):
     offsets = struct.unpack_from('<33I', (folder/'A_FILE.HDT').read_bytes())
     with (folder/'A_FILE.BIN').open('rb') as stream:
+        stream.seek(offsets[0])
+        font = stream.read(8192)
         stream.seek(offsets[0]+8192)
         animation = stream.read(3356)
         # The bounded first bank is about 140 KiB in the audited input.
         bank = stream.read(min(1024*1024,offsets[1]-offsets[0]-11548))
     vram, _ = decode_bank(bank)
+    font_vram, blocks = decode_bank(font)
+    for x,y,w,h,_ in blocks:
+        for row in range(y,y+h):
+            vram[row*1024+x:row*1024+x+w] = font_vram[row*1024+x:row*1024+x+w]
     sections = struct.unpack_from('<5I', animation, 16)
-    frame = [14 | (22<<5) | (29<<10)]*(320*240)
-    layers = [(31,0,0),(32,0,0)]
-    layers += [(34,0,0),(35,0,0),(36,100 if tick%30 < 15 else 104,179 if selection else 155)] if menu else [(33,0,0)]
-    for index, ax, ay in layers:
+    frame = [0]*(320*240)
+    states = [[index,0,0] for index in (0,10,19,22,24,26)]
+    ages = [0]*6
+    draws = []
+    raw_exe = (folder/'SLUS_011.15').read_bytes()
+    load, = struct.unpack_from('<I',raw_exe,24)
+    seed, = struct.unpack_from('<I',raw_exe,2048+0x8005E290-load)
+
+    def random(n):
+        nonlocal seed
+        seed = (seed*0x41C64E6D+0x3039)&0xFFFFFFFF
+        return ((seed>>16)*n)>>16
+
+    def advance(cursor):
+        index, pos, elapsed = cursor
+        count, offset = struct.unpack_from('<2H',animation,sections[3]+index*4)
+        duration, control = struct.unpack_from('<2B',animation,sections[4]+offset+pos*10+6)
+        elapsed += 1
+        limit = (duration+1)//2
+        if elapsed >= limit:
+            elapsed = 0
+            pos += 1
+            if pos >= count and not control&128:
+                pos = control&127
+            if control == 255:
+                elapsed = limit
+                pos -= 1
+            elif control&128:
+                pos = control&127
+        cursor[:] = index,pos,elapsed
+
+    for moment in range(1,tick+1):
+        random(65535)
+        draws = []
+        for actor in range(6):
+            for _ in range((1,1,1,3,5,3)[actor]):
+                draws.append(tuple(states[actor]))
+                advance(states[actor])
+            ages[actor] += 1
+            if ages[actor] >= (90,60,60,15,20,30)[actor]:
+                ages[actor] = 0
+                if actor < 2:
+                    chosen = random(9 if actor else 10)+(10 if actor else 0)
+                    if chosen%2 == 0:
+                        chosen -= 1
+                    chosen = max(10 if actor else 0,chosen)
+                elif actor == 2:
+                    chosen = 19+random(3)
+                    if chosen == 19:
+                        ages[actor] = 30
+                else:
+                    chosen = 22+(actor-3)*2+random(2)
+                states[actor] = [chosen,0,0]
+    # Reverse head insertion within the tile bucket; base and actors use
+    # separate ordering-table buckets, as in the original overlay.
+    tiles = []
+    phase = [(tick-1)//2%960,(tick-1)%960]
+    for layer in range(2):
+        y = phase[layer]%240*(1 if layer else -1)
+        angle = phase[1]*4096/120*6.283185307179586/4096
+        trig = round((math.sin(angle) if layer else math.cos(angle))*4096)
+        horizontal = 320-phase[layer]//240*80+int(trig*12/4096)
+        xs = [y-horizontal,y+horizontal-320 if layer else y-horizontal+320,
+              y+horizontal-640 if layer else y-horizontal+640]
+        for row in range(3):
+            for col in range(3):
+                tiles.append((37,0,xs[col],y+row*240))
+    layers = [(29,0,0,0)]+list(reversed(tiles))
+    positions = [(282,173),(33,146),(51,182),(295,205),(258,138),(280,121),
+                 (63,149),(10,188),(9,214),(295,52),(294,30),(23,30),(6,109),(36,223)]
+    layers += [(cursor[0],cursor[1],*xy) for cursor,xy in reversed(list(zip(draws,positions)))]
+    if not intro:
+        layers += [(32,0,0,0),(31,0,0,0)]
+        layers += [(35,0,0,0),(34,0,0,0),(36,0,100 if tick%30<15 else 104,179 if selection else 155)] if menu else [(33,0,0,0)]
+    for index, index_frame, ax, ay in layers:
         _, offset = struct.unpack_from('<2H', animation, sections[3]+index*4)
-        parts, fx, fy = struct.unpack_from('<H2h', animation, sections[4]+offset)
+        parts, fx, fy = struct.unpack_from('<H2h', animation, sections[4]+offset+index_frame*10)
+        if parts > 0xFFFD:
+            continue
         count, offset = struct.unpack_from('<2H', animation, sections[1]+parts*4)
         for n in range(count):
             image, palette, dx, dy, attr = struct.unpack_from('<2H2hB', animation, sections[2]+offset+n*12)
@@ -121,8 +209,14 @@ def reference(folder, *, menu=False, tick=1, selection=1):
                     color = vram[py*1024+px+((word>>((u%scale)*depth))&((1<<depth)-1))]
                     if not color:
                         continue
-                    assert not (attr&16 and color&0x8000), 'Unsupported oracle blending in static title layers'
+                    if attr&16 and color&0x8000:
+                        back = frame[y*320+x]
+                        color = (color&0x8000)|sum((((back>>shift)&31)//2+((color>>shift)&31)//2)<<shift for shift in (0,5,10))
                     frame[y*320+x] = color
+    if intro:
+        assert tick<9, 'This oracle snapshot covers the initial fade before the logo enters'
+        subtract = min(255,((0xFF000//10)*(9-tick))//4096)>>3
+        frame = [sum(max(0,((c>>shift)&31)-subtract)<<shift for shift in (0,5,10)) for c in frame]
     return b''.join(map(rgb, frame))
 
 
@@ -137,20 +231,35 @@ def check(executable, retail=None):
             run(executable,*args,code=2)
         capture = root/'prompt.bmp'
         run(executable,*common,'--frames','2','--output',capture)
-        assert bmp(capture) == reference(source)
+        assert bmp(capture) == reference(source,intro=True,tick=2)
         before = capture.read_bytes()
         run(executable,*common,'--output',capture,code=1)
         assert capture.read_bytes() == before
-        events = [(0,64),(1,0),(2,1),(3,1),(4,0),(5,16),(6,0),(7,32),(8,0),
-                  (9,2),(10,0),(11,16),(12,0),(13,32),(14,0),(15,32),(16,0),(17,64),(18,0)]
+        events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,16),(35,0),
+                  (36,32),(37,0),(38,32),(39,0),(40,64),(41,0)]
         script = root/'menu.input'
         script.write_bytes(b''.join(struct.pack('<II',*event) for event in events))
         capture = root/'menu.bmp'
-        output = run(executable,*common,'--frames','20','--input-script',script,'--output',capture)
-        assert 'New Game unavailable' in output and 'save/load requires phase 07' in output
-        assert 'title stopped: ticks=20 page=1 selection=1' in output
-        assert 'tick=3 page=' not in output, 'Held direction must not repeat menu selection'
-        assert bmp(capture) == reference(source,menu=True,tick=20)
+        output = run(executable,*common,'--frames','43','--input-script',script,'--output',capture)
+        assert 'save/load requires phase 07' in output
+        assert 'title stopped: ticks=43 page=1 selection=1' in output
+        assert bmp(capture) == reference(source,menu=True,tick=43)
+        # Original setup order: player, birthday, farm, dog, review, then a
+        # typed handoff. Gameplay is not replaced by a successful dummy scene.
+        events = [(0,0),(10,64),(11,0),(32,64),(33,0),(34,1),(35,1),(36,0),(37,16),(38,0)]
+        for tick,mask in [(59,16),(61,64),(63,16),(65,16),(67,16),(69,16),
+                          (71,16),(73,64),(75,16),(77,16),(79,64),(81,16),(83,16)]:
+            events += [(tick,mask),(tick+1,0)]
+        script.write_bytes(b''.join(struct.pack('<II',*event) for event in events))
+        output = run(executable,*common,'--frames','106','--input-script',script,'--output',root/'setup.bmp')
+        for stage in (1,2,3,4,5,6,7):
+            assert f'stage={stage} ' in output, output[-1500:]
+        assert 'tick=35 page=' not in output, 'Held menu direction must not repeat'
+        assert 'title stopped: ticks=106 page=5 selection=0' in output
+        assert 'New Game setup ready; gameplay requires phase 06' in output
+        assert 'title handoff: names=1/1/1 birthday=0/0 flags=00002000' in output
+        # The completed setup screen must contain pixels, not an empty capture.
+        assert len(set(bmp(root/'setup.bmp'))) > 3
         for invalid in (b'',b'bad',struct.pack('<II',1,0),struct.pack('<II',0,128),
                         struct.pack('<4I',0,0,0,0),struct.pack('<4I',0,0,10,0)):
             script.write_bytes(invalid)

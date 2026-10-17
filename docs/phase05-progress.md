@@ -4,28 +4,52 @@ Diperbarui: 17 Oktober 2026 (Asia/Jakarta). Baseline: `5645d68`.
 
 ## Status
 
-**Berjalan. Preview native cabang Start/menu tervalidasi Windows Debug:
-19/19 suite CTest lulus, berdasarkan hasil terminal pengguna. Fase 05 belum
-lulus karena jalur title lengkap dan perbandingan PS1 masih belum selesai.**
+**Berjalan. Intro/fade, animasi latar/aktor dan setup New Game tervalidasi
+Windows Debug: 19/19 suite CTest lulus, 0 gagal, total 19,02 detik.
+Serah-terima data New Game siap dihubungkan ke fase 06. Kesetaraan
+tampilan/timing PS1 belum diuji; fase 05 belum dinyatakan lulus penuh.**
+
+## Lanjutan setelah baseline
+
+- Rekonstruksi gerak masuk logo/copyright/Start, fade mode 1/2, dua lapis
+  latar bergerak dan enam grup aktor dari overlay title. State animasi/RNG
+  maju pada tick simulasi; presentasi hanya menggambar cache frame.
+- Setup New Game: nama pemain, ulang tahun, nama farm, nama anjing, review.
+  Grid menggunakan batas baris/kolom serta simbol dari executable; font Inggris
+  asli dibaca dari member 0. Batas delapan glyph, END marker, aturan batal,
+  kalender 30 hari dan repeat input mengikuti source yang ditelusuri.
+- Konfirmasi akhir menyediakan `BtnNewGame` melalui `btn_title_new_game()`
+  setelah fade selesai: tiga nama, season/day berbasis nol, empat seed dan
+  flag new-game. Tidak ada handler farm palsu. Layar menjelaskan batas fase 06;
+  Continue tetap memerlukan fase 07, dan idle attract memerlukan gameplay.
+- Tes diperluas untuk alur setup, batas nama/grid/calendar, reset, fade dan
+  cache animasi. Oracle Python independen kini menggambar latar/aktor bergerak.
+  Suite C/CLI sintetis dan data lokal lulus, termasuk replay setup lengkap.
+
+Panel nama/kalender dan prompt merupakan adaptasi native yang memakai glyph
+asli, bukan port lengkap window/dialog retail. Trig host menggantikan
+kuantisasi `ccos`/`csin`; penjadwalan transisi dan waktu muat juga belum
+dibandingkan PS1. Varian attract dan gameplay berada di batas fase 06.
+Keterbatasan ini tetap menjadi gerbang kesetaraan, bukan fitur yang diluluskan.
 
 Source `titleStepDispatch` sebelumnya hanya deklarasi/alamat. Audit lokal
 menemukan member 27 (`GF_TITLE.Bin`), memetakan dispatch, aset umum dan musik.
-Rekonstruksi C saat ini mencakup prompt Start, dua pilihan dengan default
-Continue, konfirmasi yang menjelaskan batas fitur, serta kontrol native untuk
-kembali. Tidak ada byte MIPS yang dijalankan sebagai fungsi host.
+Rekonstruksi C mencakup intro, prompt Start, menu dengan default Continue,
+setup New Game dan kontrol kembali. Tidak ada byte MIPS yang dijalankan
+sebagai fungsi host.
 
 ## Checklist terhadap rencana
 
 | ID | Status | Bukti/perubahan | Sisa |
 |---|---|---|---|
-| 5.1 | Sebagian | Tool audit memverifikasi executable US, overlay, delapan handler, 0E/0D, dan asal pasangan musik. Cabang menu direkonstruksi dalam C. | Body intro/varian latar, attract mode dan name-entry belum direkonstruksi lengkap. |
-| 5.2 | Lulus untuk startup preview teruji | Startup SDL, state host, loader berbatas, tanpa CRT0/BIOS; suite sintetis dan data lokal lulus. | Integrasi global yang diperlukan jalur title lengkap. |
-| 5.3 | Lulus untuk cabang preview teruji | `btn-native --title` memanggil fungsi C `btn_title_tick`/`btn_title_draw`; byte overlay hanya diperiksa sebagai data identitas struktur. | Dispatch title lengkap dan gerbang transisi gameplay. |
-| 5.4 | Lulus untuk reset preview teruji | Resource terpisah dari `BtnTitleState`; tes reset dan replay kembali ke prompt/menu lulus tanpa pointer handler PS1. | Transisi scene penuh ke gameplay/save-load. |
-| 5.5 | Sebagian | Layanan renderer, audio, input dan nominal 30 Hz memakai API host; tone SFX eksplisit. | Callback/fade/transisi title penuh, timing NTSC fraksional dan acuan PS1. |
-| 5.6 | Sebagian | Sprite logo, copyright, Start, New Game, Continue, cursor berkedip; bank 53 + sequence 54 dan SFX 0/5 terhubung. | Intro, animasi latar/aktor, nama, fade dan kesetaraan audio. |
-| 5.7 | Lulus untuk jalur fixture dan data lokal | Tes state, replay deterministik, oracle piksel independen, serta lifecycle SDL dummy lulus; seluruh 19 suite lulus. | Uji desktop/dengar, urutan dan timing terhadap PS1. |
-| 5.8 | Sebagian, diagnosis teruji | Log dan panel menjelaskan New Game/Continue yang belum tersedia; tes memeriksa status tersebut. | Verifikasi panel desktop; kedua tombol tujuan tetap belum berfungsi. |
+| 5.1 | Sebagian | Audit overlay, dispatch, gambar/font/musik; intro, latar/aktor dan setup direkonstruksi dalam C. | Varian attract gameplay dan kesetaraan perilaku retail. |
+| 5.2 | Lulus untuk jalur native teruji | Startup SDL, state host, loader berbatas, tanpa CRT0/BIOS; suite sintetis dan data lokal lulus. | Integrasi global gameplay fase 06. |
+| 5.3 | Lulus sampai handoff setup | `btn_title_tick`/`btn_title_draw` menjalankan C host; `btn_title_new_game()` menyediakan data setelah fade selesai. | Konsumen gameplay fase 06 dan save/load fase 07. |
+| 5.4 | Lulus untuk reset teruji | Resource terpisah dari state; reset intro/aktor/setup dan replay lulus tanpa pointer handler PS1. | Perpindahan scene gameplay/save-load. |
+| 5.5 | Sebagian | Renderer, audio, input, fade dan animasi memakai tick nominal 30 Hz; tes 30/60/144 FPS lulus. | Timing NTSC fraksional, kuantisasi trig dan acuan PS1. |
+| 5.6 | Sebagian | Intro, dua lapis latar, enam grup aktor, teks asli, musik, SFX dan navigasi/setup terhubung. | Window/dialog retail dan kesetaraan visual/audio. |
+| 5.7 | Lulus untuk fixture dan data lokal | Seluruh 19 suite lulus; oracle piksel animasi, replay setup, batas nama/calendar dan lifecycle SDL dummy. | Uji desktop/controller/dengar serta input/timing yang sama dengan PS1. |
+| 5.8 | Batas fitur teruji | New Game menyelesaikan setup; log/panel menjelaskan gameplay fase 06 dan Continue fase 07. | Tujuan gameplay/save-load belum berfungsi; tidak dihitung lulus. |
 
 ## Bukti audit dan input
 
@@ -58,11 +82,12 @@ Sesuai aturan sesi, configure/build/CTest yang berpotensi berlog panjang
 dijalankan pengguna. Yang diminta hanya status/exit code dan baris error
 relevan bila gagal; log penuh tidak diperlukan.
 
-Hasil terminal pengguna, 17 Oktober 2026: **19/19 lulus, 0 gagal, total 15,81
+Hasil terminal pengguna, 17 Oktober 2026: **19/19 lulus, 0 gagal, total 19,02
 detik**. Empat suite title (`native-title`, `native-title-cli`,
 `native-title-tools`, `native-title-data`) semuanya lulus. Kelima belas suite
 sebelumnya ikut dijalankan dan lulus, termasuk runtime/input, archive, grafik
-dan audio. Tidak ada kode C yang diubah setelah laporan tes ini.
+dan audio. Hasil ini mencakup lanjutan intro/fade, animasi dan setup.
+Tidak ada kode C yang diubah setelah laporan tes tersebut.
 
 | Kelompok | Suite lulus | Jalur |
 |---|---:|---|
@@ -73,20 +98,24 @@ dan audio. Tidak ada kode C yang diubah setelah laporan tes ini.
 | Title | 4 | State/clock, CLI/replay/oracle, audit tools dan data lokal |
 
 Exit code configure/build/CTest tidak dilaporkan terpisah. Laporan CTest
-menyatakan 100% lulus dan executable baru berhasil dijalankan. Smoke capture
-lokal tambahan dengan `--title --headless --frames 2` berhasil, exit code 0;
-raw framebuffer title diperiksa visual, tanpa membuka window atau audio device.
+menyatakan 100% lulus dan executable baru berhasil dijalankan. Tiga capture
+lokal tambahan (menu 43 tick, input nama 60 tick, setup selesai 106 tick)
+berhasil, masing-masing exit code 0. Framebuffer diperiksa visual: menu,
+grid nama dan ringkasan data terbaca, tanpa membuka window atau audio device.
+Log akhir mencatat `names=1/1/1 birthday=0/0 flags=00002000`, page 5.
 Ini tidak menggantikan uji desktop/controller atau uji dengar.
 
 Konfigurasi: Windows x64 Debug, generator Visual Studio 18 2026, **MSVC
 19.51.36260.0** (metadata compiler CMake), **SDL 3.2.10** (output executable).
 Bukti ringkas, hasil suite, hash source dan binary disimpan lokal di
-`build/native-validation/phase05-windows-evidence.json`. Capture lokal:
-`build/native-validation/phase05-title-native.bmp`. Asset/capture tidak dikomit.
+`build/native-validation/phase05-setup-windows-evidence.json`. Capture lokal:
+`build/native-validation/phase05-setup-{menu,naming,ready}.bmp` dan `.png`.
+Asset/capture tidak dikomit. Bukti baseline `ad23134` (19/19, 15,81 detik)
+tetap terpisah di `phase05-windows-evidence.json`.
 
 Linux ASan/UBSan dan capture PS1 belum diuji. Rencana asal di direktori induk
-tidak ditandai selesai. Background masih warna rata; intro, attract mode,
-animasi latar/aktor, fade, input nama dan transisi gameplay belum selesai.
+tidak ditandai selesai. Intro, animasi latar/aktor, fade dan input nama kini
+tersedia. Attract gameplay, perpindahan ke farm dan save/load belum tersedia.
 
 Commit implementasi dicatat di
 [Notes fase 05](https://notes.dlands.me/doc/progres-fase-05-layar-judul-native-BwWOSiJ5r9)

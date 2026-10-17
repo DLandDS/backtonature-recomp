@@ -4,12 +4,20 @@
 #include "animation.h"
 #include "audio.h"
 #include "image_bank.h"
+#include "title_setup.h"
 
 #define BTN_TITLE_HZ 30u /* main_run_frame uses VSync(2); nominal NTSC rate. */
-typedef enum { BTN_TITLE_PROMPT, BTN_TITLE_MENU, BTN_TITLE_UNAVAILABLE } BtnTitlePage;
+typedef enum {
+    BTN_TITLE_PROMPT, BTN_TITLE_MENU, BTN_TITLE_UNAVAILABLE, BTN_TITLE_INTRO,
+    BTN_TITLE_SETUP, BTN_TITLE_READY, BTN_TITLE_ATTRACT
+} BtnTitlePage;
 typedef struct {
     BtnTitlePage page;
     unsigned selection, ticks, page_ticks;
+    unsigned fade_mode, fade_level, fade_length, intro_stage, intro_ticks;
+    int logo_y, copyright_y, start_x;
+    BtnTitlePage target;
+    bool pending;
 } BtnTitleState;
 
 typedef struct {
@@ -17,15 +25,19 @@ typedef struct {
     BtnGraphics *assets, *graphics;
     BtnDrawList *list;
     BtnAnimation animation;
-    uint8_t *animation_data, *image_data, *music_data, *sequence_data, *effects_data;
+    uint8_t *animation_data, *image_data, *music_data, *sequence_data, *effects_data, *font_data;
     BtnAudioBank music_bank, effects_bank;
     BtnAudio music, effects;
     BtnSequence sequence;
-    uint16_t effect_definitions[2][7];
+    uint16_t effect_definitions[6][7];
+    BtnNameLayout name_layout;
+    BtnTitleSetup setup;
+    BtnAnimationCursor actors[6], actor_frames[14];
+    unsigned actor_ticks[6], background[2], background_frame[2];
+    uint32_t random;
 } BtnTitle;
 
-/* CPU-native reconstruction of the audited Start/menu branch, not an overlay
- * interpreter. Intro, scenery motion and new-game setup are not ported yet.
+/* CPU-native title and new-game setup; never an overlay interpreter.
  * Scene state resets independently of resource loading. */
 void btn_title_reset(BtnTitleState *state);
 int btn_title_step(BtnTitleState *state, const BtnInput *input);
@@ -36,5 +48,8 @@ void btn_title_close(BtnTitle *title);
 bool btn_title_tick(BtnTitle *title, const BtnInput *input);
 bool btn_title_draw(BtnTitle *title, uint32_t *pixels, size_t count);
 bool btn_title_audio(BtnTitle *title, int16_t *stereo, size_t frames);
+/* Available only after setup confirmation and its transition have completed.
+ * This typed handoff does not claim that a farm/gameplay scene is implemented. */
+const BtnNewGame *btn_title_new_game(const BtnTitle *title);
 
 #endif
